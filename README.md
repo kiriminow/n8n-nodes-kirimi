@@ -79,4 +79,4 @@ For issues and feature requests, please visit: https://github.com/kiriminow/n8n-
 
 ## License
 
-MIT
+MIT# n8n-nodes-kirimi
