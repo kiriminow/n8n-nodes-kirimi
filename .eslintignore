@@ -1,0 +1,8 @@
+# Ignore gulp configuration file
+gulpfile.js
+
+# Ignore build output
+dist/
+
+# Ignore node_modules
+node_modules/
