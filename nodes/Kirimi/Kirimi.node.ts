@@ -533,6 +533,19 @@ export class Kirimi implements INodeType {
 				description: 'URL for media (image, video, document)',
 			},
 			{
+				displayName: 'File Name',
+				name: 'fileName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['sendMessage', 'sendMessageFast'],
+					},
+				},
+				default: '',
+				description: 'Custom file name for the media (optional)',
+			},
+			{
 				displayName: 'Enable Typing Effect',
 				name: 'enableTypingEffect',
 				type: 'boolean',
@@ -865,23 +878,27 @@ export class Kirimi implements INodeType {
 					}
 				} else if (resource === 'message') {
 					if (operation === 'sendMessage') {
-						endpoint = '/send-message';
-						body.device_id = this.getNodeParameter('deviceId', i);
-						body.receiver = this.getNodeParameter('receiver', i);
-						const message = this.getNodeParameter('message', i) as string;
-						if (message) body.message = message;
-						const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
-						if (mediaUrl) body.media_url = mediaUrl;
-						body.enableTypingEffect = this.getNodeParameter('enableTypingEffect', i);
-						body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i);
+					endpoint = '/send-message';
+					body.device_id = this.getNodeParameter('deviceId', i);
+					body.receiver = this.getNodeParameter('receiver', i);
+					const message = this.getNodeParameter('message', i) as string;
+					if (message) body.message = message;
+					const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
+					if (mediaUrl) body.media_url = mediaUrl;
+					const fileName = this.getNodeParameter('fileName', i) as string;
+					if (fileName) body.fileName = fileName;
+					body.enableTypingEffect = this.getNodeParameter('enableTypingEffect', i);
+					body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i);
 					} else if (operation === 'sendMessageFast') {
-						endpoint = '/send-message-fast';
-						body.device_id = this.getNodeParameter('deviceId', i);
-						body.receiver = this.getNodeParameter('receiver', i);
-						const message = this.getNodeParameter('message', i) as string;
-						if (message) body.message = message;
-						const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
-						if (mediaUrl) body.media_url = mediaUrl;
+					endpoint = '/send-message-fast';
+					body.device_id = this.getNodeParameter('deviceId', i);
+					body.receiver = this.getNodeParameter('receiver', i);
+					const message = this.getNodeParameter('message', i) as string;
+					if (message) body.message = message;
+					const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
+					if (mediaUrl) body.media_url = mediaUrl;
+					const fileName = this.getNodeParameter('fileName', i) as string;
+					if (fileName) body.fileName = fileName;
 					} else if (operation === 'broadcastMessage') {
 						endpoint = '/broadcast-message';
 						body.device_id = this.getNodeParameter('deviceId', i);

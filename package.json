@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-kirimi",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "description": "n8n community node for Kirimi WhatsApp Unofficial API",
   "keywords": [
     "n8n-community-node-package",
