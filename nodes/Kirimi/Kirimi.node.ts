@@ -16,7 +16,7 @@ export class Kirimi implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Kirimi',
 		name: 'kirimi',
-		iconUrl: 'https://kirimi.id/kirimi.svg',
+		icon: 'file:kirimi.svg',
 		group: ['communication'],
 		version: 1,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
