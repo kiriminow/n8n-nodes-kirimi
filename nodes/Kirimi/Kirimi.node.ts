@@ -1,6 +1,7 @@
-import { IExecuteFunctions } from 'n8n-core';
 import {
 	IDataObject,
+	IExecuteFunctions,
+	IHttpRequestMethods,
 	ILoadOptionsFunctions,
 	INodeExecutionData,
 	INodePropertyOptions,
@@ -23,8 +24,8 @@ export class Kirimi implements INodeType {
 		defaults: {
 			name: 'Kirimi',
 		},
-		inputs: ['main'],
-		outputs: ['main'],
+		inputs: ['main'] as any,
+		outputs: ['main'] as any,
 		credentials: [
 			{
 				name: 'kirimiApi',
@@ -39,14 +40,9 @@ export class Kirimi implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
-						name: 'OTP',
-						value: 'otp',
-						description: 'OTP management operations',
-					},
-					{
-						name: 'Message',
-						value: 'message',
-						description: 'Message sending operations',
+						name: 'Contact',
+						value: 'contact',
+						description: 'Contact management operations',
 					},
 					{
 						name: 'Device',
@@ -54,9 +50,14 @@ export class Kirimi implements INodeType {
 						description: 'Device management operations',
 					},
 					{
-						name: 'Contact',
-						value: 'contact',
-						description: 'Contact management operations',
+						name: 'Message',
+						value: 'message',
+						description: 'Message sending operations',
+					},
+					{
+						name: 'OTP',
+						value: 'otp',
+						description: 'OTP management operations',
 					},
 					{
 						name: 'Package',
@@ -64,14 +65,14 @@ export class Kirimi implements INodeType {
 						description: 'Package and billing operations',
 					},
 					{
-						name: 'User',
-						value: 'user',
-						description: 'User information operations',
-					},
-					{
 						name: 'Security',
 						value: 'security',
 						description: 'Security and monitoring operations',
+					},
+					{
+						name: 'User',
+						value: 'user',
+						description: 'User information operations',
 					},
 					{
 						name: 'Utility',
@@ -160,16 +161,16 @@ export class Kirimi implements INodeType {
 				},
 				options: [
 					{
-						name: 'Create Device',
-						value: 'createDevice',
-						description: 'Create a new WhatsApp device',
-						action: 'Create a device',
-					},
-					{
 						name: 'Connect Device',
 						value: 'connectDevice',
 						description: 'Connect WhatsApp device',
 						action: 'Connect a device',
+					},
+					{
+						name: 'Create Device',
+						value: 'createDevice',
+						description: 'Create a new WhatsApp device',
+						action: 'Create a device',
 					},
 					{
 						name: 'Device Status',
@@ -410,7 +411,7 @@ export class Kirimi implements INodeType {
 				description: 'Whether to enable typing effect',
 			},
 			{
-				displayName: 'Typing Speed (ms)',
+				displayName: 'Typing Speed (Ms)',
 				name: 'typingSpeedMs',
 				type: 'number',
 				displayOptions: {
@@ -545,7 +546,7 @@ export class Kirimi implements INodeType {
 				description: 'Whether to enable typing effect',
 			},
 			{
-				displayName: 'Typing Speed (ms)',
+				displayName: 'Typing Speed (Ms)',
 				name: 'typingSpeedMs',
 				type: 'number',
 				displayOptions: {
@@ -615,7 +616,7 @@ export class Kirimi implements INodeType {
 				description: 'URL for media (image, video, document)',
 			},
 			{
-				displayName: 'Delay (seconds)',
+				displayName: 'Delay (Seconds)',
 				name: 'delay',
 				type: 'number',
 				displayOptions: {
@@ -628,7 +629,7 @@ export class Kirimi implements INodeType {
 				description: 'Delay between messages in seconds (minimum 30)',
 			},
 			{
-				displayName: 'Delay Min (seconds)',
+				displayName: 'Delay Min (Seconds)',
 				name: 'delayMin',
 				type: 'number',
 				displayOptions: {
@@ -641,7 +642,7 @@ export class Kirimi implements INodeType {
 				description: 'Minimum delay (optional)',
 			},
 			{
-				displayName: 'Delay Max (seconds)',
+				displayName: 'Delay Max (Seconds)',
 				name: 'delayMax',
 				type: 'number',
 				displayOptions: {
@@ -709,7 +710,6 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'Contact name',
 			},
 			{
 				displayName: 'Phone Number',
@@ -723,12 +723,12 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'Phone number',
 			},
 			{
 				displayName: 'Email',
 				name: 'email',
 				type: 'string',
+				placeholder: 'name@email.com',
 				displayOptions: {
 					show: {
 						resource: ['contact'],
@@ -793,7 +793,6 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'Payment method',
 			},
 			{
 				displayName: 'Deposit ID',
@@ -837,7 +836,7 @@ export class Kirimi implements INodeType {
 		for (let i = 0; i < items.length; i++) {
 			const body: IDataObject = {};
 			let endpoint = '';
-			let method = 'POST';
+			let method: IHttpRequestMethods = 'POST';
 
 			// Add authentication to all requests
 			const credentials = await this.getCredentials('kirimiApi');
@@ -979,7 +978,7 @@ export class Kirimi implements INodeType {
 				returnData.push(responseData);
 			} catch (error) {
 				if (this.continueOnFail()) {
-					returnData.push({ error: error.message });
+					returnData.push({ error: (error as Error).message });
 					continue;
 				}
 				throw error;

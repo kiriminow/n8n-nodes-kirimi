@@ -1,5 +1,4 @@
-import { IExecuteFunctions, ILoadOptionsFunctions } from 'n8n-core';
-import { IDataObject, IHttpRequestMethods, IHttpRequestOptions, NodeApiError } from 'n8n-workflow';
+import { IDataObject, IExecuteFunctions, IHttpRequestMethods, IHttpRequestOptions, ILoadOptionsFunctions, NodeApiError } from 'n8n-workflow';
 
 export async function kirimiApiRequest(
 	this: IExecuteFunctions | ILoadOptionsFunctions,
@@ -25,6 +24,6 @@ export async function kirimiApiRequest(
 	try {
 		return await this.helpers.httpRequest.call(this, options);
 	} catch (error) {
-		throw new NodeApiError(this.getNode(), error);
+		throw new NodeApiError(this.getNode(), error as any);
 	}
 }
