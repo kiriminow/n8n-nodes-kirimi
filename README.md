@@ -60,7 +60,7 @@ The Kirimi node provides comprehensive integration with Kirimi's WhatsApp Unoffi
    - Secret: Your Kirimi API secret key
    - Base URL: https://api.kirimi.id/v1 (default)
 
-2. Get your credentials from [Kirimi Documentation](https://kirimi.id/docs)
+2. Get your credentials from [Kirimi Documentation](https://dash.kirimi.id/docs)
 
 ## Usage
 
