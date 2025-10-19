@@ -546,6 +546,19 @@ export class Kirimi implements INodeType {
 				description: 'Custom file name for the media (optional)',
 			},
 			{
+				displayName: 'Quoted Message ID',
+				name: 'quotedMessageId',
+				type: 'string',
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['sendMessage', 'sendMessageFast'],
+					},
+				},
+				default: '',
+				description: 'Message ID to quote/reply to (optional)',
+			},
+			{
 				displayName: 'Enable Typing Effect',
 				name: 'enableTypingEffect',
 				type: 'boolean',
@@ -887,6 +900,8 @@ export class Kirimi implements INodeType {
 					if (mediaUrl) body.media_url = mediaUrl;
 					const fileName = this.getNodeParameter('fileName', i) as string;
 					if (fileName) body.fileName = fileName;
+					const quotedMessageId = this.getNodeParameter('quotedMessageId', i) as string;
+					if (quotedMessageId) body.quotedMessageId = quotedMessageId;
 					body.enableTypingEffect = this.getNodeParameter('enableTypingEffect', i);
 					body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i);
 					} else if (operation === 'sendMessageFast') {
@@ -899,6 +914,8 @@ export class Kirimi implements INodeType {
 					if (mediaUrl) body.media_url = mediaUrl;
 					const fileName = this.getNodeParameter('fileName', i) as string;
 					if (fileName) body.fileName = fileName;
+					const quotedMessageId = this.getNodeParameter('quotedMessageId', i) as string;
+					if (quotedMessageId) body.quotedMessageId = quotedMessageId;
 					} else if (operation === 'broadcastMessage') {
 						endpoint = '/broadcast-message';
 						body.device_id = this.getNodeParameter('deviceId', i);
