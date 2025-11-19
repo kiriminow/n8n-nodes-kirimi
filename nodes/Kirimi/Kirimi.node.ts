@@ -97,16 +97,28 @@ export class Kirimi implements INodeType {
 				},
 				options: [
 					{
-						name: 'Generate OTP',
+						name: 'Generate OTP (V1)',
 						value: 'generateOtp',
-						description: 'Generate and send OTP via WhatsApp',
-						action: 'Generate an OTP',
+						description: 'Generate and send OTP via WhatsApp (V1 API)',
+						action: 'Generate an OTP (V1)',
 					},
 					{
-						name: 'Validate OTP',
+						name: 'Validate OTP (V1)',
 						value: 'validateOtp',
-						description: 'Validate OTP code',
-						action: 'Validate an OTP',
+						description: 'Validate OTP code (V1 API)',
+						action: 'Validate an OTP (V1)',
+					},
+					{
+						name: 'Send OTP V2 (Recommended)',
+						value: 'sendOtpV2',
+						description: 'Send OTP with dual method support (WABA or Device) - V2 API',
+						action: 'Send OTP V2',
+					},
+					{
+						name: 'Verify OTP V2 (Recommended)',
+						value: 'verifyOtpV2',
+						description: 'Verify OTP code - V2 API',
+						action: 'Verify OTP V2',
 					},
 				],
 				default: 'generateOtp',
@@ -489,6 +501,119 @@ export class Kirimi implements INodeType {
 				},
 				default: '',
 				description: 'Custom message template (must contain {otp})',
+			},
+
+			// OTP V2 Fields
+			{
+				displayName: 'Phone Number (V2)',
+				name: 'phoneV2',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['otp'],
+						operation: ['sendOtpV2', 'verifyOtpV2'],
+					},
+				},
+				default: '',
+				description: 'Customer phone number (format: 08xxx, 62xxx, +62xxx)',
+			},
+			{
+				displayName: 'Send Method',
+				name: 'otpMethod',
+				type: 'options',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['otp'],
+						operation: ['sendOtpV2'],
+					},
+				},
+				options: [
+					{
+						name: 'WABA (Central) - Rp 400/OTP',
+						value: 'waba',
+						description: 'Use Kirimi WABA (high reliability, template-based, costs Rp 400/OTP)',
+					},
+					{
+						name: 'Device (Own Device) - Free',
+						value: 'device',
+						description: 'Use your own device (free, customizable, uses device quota)',
+					},
+				],
+				default: 'waba',
+				description: 'Choose OTP sending method',
+			},
+			{
+				displayName: 'App Name',
+				name: 'appName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						resource: ['otp'],
+						operation: ['sendOtpV2'],
+					},
+				},
+				default: 'Kirimi.id',
+				description: 'Application name to show in OTP message',
+			},
+			{
+				displayName: 'Device ID (for Device Method)',
+				name: 'deviceIdV2',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['otp'],
+						operation: ['sendOtpV2'],
+						otpMethod: ['device'],
+					},
+				},
+				default: '',
+				description: 'Device ID to use for sending OTP (required for device method)',
+			},
+			{
+				displayName: 'Template Code (for WABA Method)',
+				name: 'templateCode',
+				type: 'string',
+				displayOptions: {
+					show: {
+						resource: ['otp'],
+						operation: ['sendOtpV2'],
+						otpMethod: ['waba'],
+					},
+				},
+				default: '',
+				description: 'WhatsApp template code (optional)',
+			},
+			{
+				displayName: 'Custom Message (for Device Method)',
+				name: 'customMessageV2',
+				type: 'string',
+				displayOptions: {
+					show: {
+						resource: ['otp'],
+						operation: ['sendOtpV2'],
+						otpMethod: ['device'],
+					},
+				},
+				default: '🔐 Kode OTP {{app_name}}\n\nKode verifikasi Anda: {{otp}}\n\nBerlaku 5 menit. Jangan bagikan!',
+				description: 'Custom message template. Must contain {{otp}} placeholder. Optionally use {{app_name}}.',
+				placeholder: '🔐 Kode OTP {{app_name}}\n\nKode verifikasi: {{otp}}\n\nBerlaku 5 menit.',
+			},
+			{
+				displayName: 'OTP Code (V2)',
+				name: 'otpCodeV2',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['otp'],
+						operation: ['verifyOtpV2'],
+					},
+				},
+				default: '',
+				description: 'The 6-digit OTP code to verify',
 			},
 
 			// Message Fields
@@ -888,34 +1013,54 @@ export class Kirimi implements INodeType {
 						body.device_id = this.getNodeParameter('deviceId', i);
 						body.phone = this.getNodeParameter('phone', i);
 						body.otp = this.getNodeParameter('otp', i);
+					} else if (operation === 'sendOtpV2') {
+						endpoint = '/v2/otp/send';
+						body.phone = this.getNodeParameter('phoneV2', i);
+						body.method = this.getNodeParameter('otpMethod', i);
+						const appName = this.getNodeParameter('appName', i) as string;
+						if (appName) body.app_name = appName;
+
+						// Add method-specific parameters
+						if (body.method === 'waba') {
+							const templateCode = this.getNodeParameter('templateCode', i) as string;
+							if (templateCode) body.template_code = templateCode;
+						} else if (body.method === 'device') {
+							body.device_id = this.getNodeParameter('deviceIdV2', i);
+							const customMessage = this.getNodeParameter('customMessageV2', i) as string;
+							if (customMessage) body.custom_message = customMessage;
+						}
+					} else if (operation === 'verifyOtpV2') {
+						endpoint = '/v2/otp/verify';
+						body.phone = this.getNodeParameter('phoneV2', i);
+						body.otp_code = this.getNodeParameter('otpCodeV2', i);
 					}
 				} else if (resource === 'message') {
 					if (operation === 'sendMessage') {
-					endpoint = '/send-message';
-					body.device_id = this.getNodeParameter('deviceId', i);
-					body.receiver = this.getNodeParameter('receiver', i);
-					const message = this.getNodeParameter('message', i) as string;
-					if (message) body.message = message;
-					const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
-					if (mediaUrl) body.media_url = mediaUrl;
-					const fileName = this.getNodeParameter('fileName', i) as string;
-					if (fileName) body.fileName = fileName;
-					const quotedMessageId = this.getNodeParameter('quotedMessageId', i) as string;
-					if (quotedMessageId) body.quotedMessageId = quotedMessageId;
-					body.enableTypingEffect = this.getNodeParameter('enableTypingEffect', i);
-					body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i);
+						endpoint = '/send-message';
+						body.device_id = this.getNodeParameter('deviceId', i);
+						body.receiver = this.getNodeParameter('receiver', i);
+						const message = this.getNodeParameter('message', i) as string;
+						if (message) body.message = message;
+						const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
+						if (mediaUrl) body.media_url = mediaUrl;
+						const fileName = this.getNodeParameter('fileName', i) as string;
+						if (fileName) body.fileName = fileName;
+						const quotedMessageId = this.getNodeParameter('quotedMessageId', i) as string;
+						if (quotedMessageId) body.quotedMessageId = quotedMessageId;
+						body.enableTypingEffect = this.getNodeParameter('enableTypingEffect', i);
+						body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i);
 					} else if (operation === 'sendMessageFast') {
-					endpoint = '/send-message-fast';
-					body.device_id = this.getNodeParameter('deviceId', i);
-					body.receiver = this.getNodeParameter('receiver', i);
-					const message = this.getNodeParameter('message', i) as string;
-					if (message) body.message = message;
-					const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
-					if (mediaUrl) body.media_url = mediaUrl;
-					const fileName = this.getNodeParameter('fileName', i) as string;
-					if (fileName) body.fileName = fileName;
-					const quotedMessageId = this.getNodeParameter('quotedMessageId', i) as string;
-					if (quotedMessageId) body.quotedMessageId = quotedMessageId;
+						endpoint = '/send-message-fast';
+						body.device_id = this.getNodeParameter('deviceId', i);
+						body.receiver = this.getNodeParameter('receiver', i);
+						const message = this.getNodeParameter('message', i) as string;
+						if (message) body.message = message;
+						const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
+						if (mediaUrl) body.media_url = mediaUrl;
+						const fileName = this.getNodeParameter('fileName', i) as string;
+						if (fileName) body.fileName = fileName;
+						const quotedMessageId = this.getNodeParameter('quotedMessageId', i) as string;
+						if (quotedMessageId) body.quotedMessageId = quotedMessageId;
 					} else if (operation === 'broadcastMessage') {
 						endpoint = '/broadcast-message';
 						body.device_id = this.getNodeParameter('deviceId', i);

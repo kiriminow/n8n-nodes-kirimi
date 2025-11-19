@@ -7,8 +7,10 @@ This is an n8n community node for integrating with the Kirimi WhatsApp Unofficia
 The Kirimi node provides comprehensive integration with Kirimi's WhatsApp Unofficial API, including:
 
 ### OTP Management
-- Generate OTP and send via WhatsApp
-- Validate OTP codes
+- **OTP V2 (Recommended)**: Dual method support (WABA Central or Device)
+  - WABA Method: High reliability, Rp 400/OTP
+  - Device Method: Free, customizable messages
+- OTP V1: Legacy generate and validate OTP
 - Customizable OTP length, type, and messages
 
 ### Message Sending
