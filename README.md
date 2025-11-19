@@ -44,6 +44,13 @@ The Kirimi node provides comprehensive integration with Kirimi's WhatsApp Unoffi
 ### Utilities
 - Test phone number normalization
 
+### Webhook Trigger (NEW!)
+- Receive webhook events from Kirimi
+- Filter events by type (message, connection, QR, etc)
+- Filter messages by sender, type, and group status
+- Auto-process incoming WhatsApp messages
+- Real-time notifications for device status changes
+
 ## Installation
 
 1. Install in n8n community nodes:
@@ -64,10 +71,22 @@ The Kirimi node provides comprehensive integration with Kirimi's WhatsApp Unoffi
 
 ## Usage
 
+### Regular Actions (Kirimi Node)
+
 1. Add the Kirimi node to your workflow
 2. Select the appropriate resource and operation
 3. Configure the required parameters
 4. Execute the workflow
+
+### Webhook Trigger (Kirimi Trigger Node)
+
+1. Add the "Kirimi Trigger" node to your workflow
+2. Select the events you want to receive (e.g., "Message", "Connection Connected")
+3. Configure optional filters (device ID, message type, etc)
+4. Activate the workflow to get your webhook URL
+5. Copy the webhook URL and configure it in your [Kirimi Dashboard](https://dashboard.kirimi.id)
+
+For detailed webhook trigger usage, see [KIRIMI_TRIGGER_README.md](./KIRIMI_TRIGGER_README.md)
 
 ## API Documentation
 

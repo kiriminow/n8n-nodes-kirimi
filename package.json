@@ -38,7 +38,8 @@
       "dist/credentials/KirimiApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/Kirimi/Kirimi.node.js"
+      "dist/nodes/Kirimi/Kirimi.node.js",
+      "dist/nodes/KirimiTrigger/KirimiTrigger.node.js"
     ]
   },
   "devDependencies": {
