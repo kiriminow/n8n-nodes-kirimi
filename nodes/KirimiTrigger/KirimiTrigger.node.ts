@@ -37,24 +37,9 @@ export class KirimiTrigger implements INodeType {
                 type: 'multiOptions',
                 options: [
                     {
-                        name: 'Message (Incoming)',
-                        value: 'message',
-                        description: 'Triggered when a new message is received',
-                    },
-                    {
-                        name: 'Message Sent',
-                        value: 'message.sent',
-                        description: 'Triggered when a message is successfully sent',
-                    },
-                    {
-                        name: 'Message Failed',
-                        value: 'message.failed',
-                        description: 'Triggered when a message fails to send',
-                    },
-                    {
-                        name: 'Message ACK',
-                        value: 'message.ack',
-                        description: 'Triggered when message status changes (delivered, read, etc)',
+                        name: 'Call Offer',
+                        value: 'call.offer',
+                        description: 'Triggered when there is an incoming call',
                     },
                     {
                         name: 'Connection Connected',
@@ -67,16 +52,6 @@ export class KirimiTrigger implements INodeType {
                         description: 'Triggered when device disconnects',
                     },
                     {
-                        name: 'Logged Out',
-                        value: 'logged_out',
-                        description: 'Triggered when device logs out',
-                    },
-                    {
-                        name: 'QR Code',
-                        value: 'qr',
-                        description: 'Triggered when QR code is generated',
-                    },
-                    {
                         name: 'Group Join',
                         value: 'group.join',
                         description: 'Triggered when joining a new group',
@@ -87,14 +62,39 @@ export class KirimiTrigger implements INodeType {
                         description: 'Triggered when group is updated',
                     },
                     {
+                        name: 'Logged Out',
+                        value: 'logged_out',
+                        description: 'Triggered when device logs out',
+                    },
+                    {
+                        name: 'Message (Incoming)',
+                        value: 'message',
+                        description: 'Triggered when a new message is received',
+                    },
+                    {
+                        name: 'Message ACK',
+                        value: 'message.ack',
+                        description: 'Triggered when message status changes (delivered, read, etc)',
+                    },
+                    {
+                        name: 'Message Failed',
+                        value: 'message.failed',
+                        description: 'Triggered when a message fails to send',
+                    },
+                    {
+                        name: 'Message Sent',
+                        value: 'message.sent',
+                        description: 'Triggered when a message is successfully sent',
+                    },
+                    {
                         name: 'Presence Update',
                         value: 'presence.update',
                         description: 'Triggered when user status changes (typing, online, etc)',
                     },
                     {
-                        name: 'Call Offer',
-                        value: 'call.offer',
-                        description: 'Triggered when there is an incoming call',
+                        name: 'QR Code',
+                        value: 'qr',
+                        description: 'Triggered when QR code is generated',
                     },
                 ],
                 default: ['message'],
@@ -168,36 +168,36 @@ export class KirimiTrigger implements INodeType {
                         },
                         options: [
                             {
-                                name: 'Text',
-                                value: 'text',
-                            },
-                            {
-                                name: 'Image',
-                                value: 'image',
-                            },
-                            {
-                                name: 'Video',
-                                value: 'video',
-                            },
-                            {
                                 name: 'Audio',
                                 value: 'audio',
+                            },
+                            {
+                                name: 'Contact',
+                                value: 'contact',
                             },
                             {
                                 name: 'Document',
                                 value: 'document',
                             },
                             {
-                                name: 'Sticker',
-                                value: 'sticker',
+                                name: 'Image',
+                                value: 'image',
                             },
                             {
                                 name: 'Location',
                                 value: 'location',
                             },
                             {
-                                name: 'Contact',
-                                value: 'contact',
+                                name: 'Sticker',
+                                value: 'sticker',
+                            },
+                            {
+                                name: 'Text',
+                                value: 'text',
+                            },
+                            {
+                                name: 'Video',
+                                value: 'video',
                             },
                         ],
                         default: [],
