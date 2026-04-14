@@ -65,26 +65,21 @@ export class Kirimi implements INodeType {
 						description: 'Package and billing operations',
 					},
 					{
-						name: 'Security',
-						value: 'security',
-						description: 'Security and monitoring operations',
-					},
-					{
 						name: 'User',
 						value: 'user',
 						description: 'User information operations',
 					},
 					{
-						name: 'Utility',
-						value: 'utility',
-						description: 'Testing and utility operations',
+						name: 'WABA',
+						value: 'waba',
+						description: 'WhatsApp Business API operations',
 					},
 				],
 				default: 'message',
 				required: true,
 			},
 
-			// OTP Operations
+			// ── OTP Operations ──────────────────────────────────────────────────────
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -125,7 +120,7 @@ export class Kirimi implements INodeType {
 				required: true,
 			},
 
-			// Message Operations
+			// ── Message Operations ───────────────────────────────────────────────────
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -146,8 +141,14 @@ export class Kirimi implements INodeType {
 					{
 						name: 'Send Message Fast',
 						value: 'sendMessageFast',
-						description: 'Send a WhatsApp message (fast mode)',
+						description: 'Send a WhatsApp message (fast mode, no typing effect)',
 						action: 'Send a message fast',
+					},
+					{
+						name: 'Send Message File',
+						value: 'sendMessageFile',
+						description: 'Send a file via multipart upload (max 50MB)',
+						action: 'Send a message with file',
 					},
 					{
 						name: 'Broadcast Message',
@@ -160,7 +161,7 @@ export class Kirimi implements INodeType {
 				required: true,
 			},
 
-			// Device Operations
+			// ── Device Operations ────────────────────────────────────────────────────
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -173,22 +174,16 @@ export class Kirimi implements INodeType {
 				},
 				options: [
 					{
-						name: 'Connect Device',
-						value: 'connectDevice',
-						description: 'Connect WhatsApp device',
-						action: 'Connect a device',
-					},
-					{
-						name: 'Create Device',
-						value: 'createDevice',
-						description: 'Create a new WhatsApp device',
-						action: 'Create a device',
-					},
-					{
 						name: 'Device Status',
 						value: 'deviceStatus',
-						description: 'Check device status',
+						description: 'Check device connection status',
 						action: 'Get device status',
+					},
+					{
+						name: 'Device Status Enhanced',
+						value: 'deviceStatusEnhanced',
+						description: 'Get full detail device status',
+						action: 'Get device status enhanced',
 					},
 					{
 						name: 'List Devices',
@@ -196,18 +191,12 @@ export class Kirimi implements INodeType {
 						description: 'List all devices',
 						action: 'List devices',
 					},
-					{
-						name: 'Renew Device',
-						value: 'renewDevice',
-						description: 'Renew device subscription',
-						action: 'Renew a device',
-					},
 				],
 				default: 'deviceStatus',
 				required: true,
 			},
 
-			// Contact Operations
+			// ── Contact Operations ───────────────────────────────────────────────────
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -225,18 +214,12 @@ export class Kirimi implements INodeType {
 						description: 'Save a single contact',
 						action: 'Save a contact',
 					},
-					{
-						name: 'Save Contacts Bulk',
-						value: 'saveContactsBulk',
-						description: 'Save multiple contacts',
-						action: 'Save contacts in bulk',
-					},
 				],
 				default: 'saveContact',
 				required: true,
 			},
 
-			// Package Operations
+			// ── Package Operations ───────────────────────────────────────────────────
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -255,23 +238,17 @@ export class Kirimi implements INodeType {
 						action: 'List packages',
 					},
 					{
-						name: 'Create Deposit',
-						value: 'createDeposit',
-						description: 'Create a deposit for top-up',
-						action: 'Create a deposit',
-					},
-					{
-						name: 'Deposit Status',
-						value: 'depositStatus',
-						description: 'Check deposit status',
-						action: 'Get deposit status',
+						name: 'List Deposits',
+						value: 'listDeposits',
+						description: 'Get deposit history',
+						action: 'List deposits',
 					},
 				],
 				default: 'listPackages',
 				required: true,
 			},
 
-			// User Operations
+			// ── User Operations ──────────────────────────────────────────────────────
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -286,7 +263,7 @@ export class Kirimi implements INodeType {
 					{
 						name: 'User Info',
 						value: 'userInfo',
-						description: 'Get user information',
+						description: 'Get user account information',
 						action: 'Get user info',
 					},
 				],
@@ -294,7 +271,7 @@ export class Kirimi implements INodeType {
 				required: true,
 			},
 
-			// Security Operations
+			// ── WABA Operations ──────────────────────────────────────────────────────
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -302,57 +279,22 @@ export class Kirimi implements INodeType {
 				noDataExpression: true,
 				displayOptions: {
 					show: {
-						resource: ['security'],
+						resource: ['waba'],
 					},
 				},
 				options: [
 					{
-						name: 'OTP Security Status',
-						value: 'otpSecurityStatus',
-						description: 'Check OTP security status',
-						action: 'Get OTP security status',
-					},
-					{
-						name: 'Merchant Reputation',
-						value: 'merchantReputation',
-						description: 'Check merchant reputation',
-						action: 'Get merchant reputation',
-					},
-					{
-						name: 'Customer OTP Stats',
-						value: 'customerOtpStats',
-						description: 'Get customer OTP statistics',
-						action: 'Get customer OTP stats',
+						name: 'Send Message',
+						value: 'sendWabaMessage',
+						description: 'Send a message via WhatsApp Business API (Meta Cloud API)',
+						action: 'Send WABA message',
 					},
 				],
-				default: 'otpSecurityStatus',
+				default: 'sendWabaMessage',
 				required: true,
 			},
 
-			// Utility Operations
-			{
-				displayName: 'Operation',
-				name: 'operation',
-				type: 'options',
-				noDataExpression: true,
-				displayOptions: {
-					show: {
-						resource: ['utility'],
-					},
-				},
-				options: [
-					{
-						name: 'Test Phone Normalization',
-						value: 'testPhoneNormalization',
-						description: 'Test phone number normalization',
-						action: 'Test phone normalization',
-					},
-				],
-				default: 'testPhoneNormalization',
-				required: true,
-			},
-
-			// Device ID field (required for most operations)
+			// ── Shared Device ID ─────────────────────────────────────────────────────
 			{
 				displayName: 'Device ID',
 				name: 'deviceId',
@@ -360,7 +302,21 @@ export class Kirimi implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						resource: ['otp', 'message', 'contact'],
+						resource: ['otp', 'contact'],
+					},
+				},
+				default: '',
+				description: 'The WhatsApp device ID to use',
+			},
+			{
+				displayName: 'Device ID',
+				name: 'deviceId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['sendMessage', 'sendMessageFast', 'sendMessageFile', 'broadcastMessage'],
 					},
 				},
 				default: '',
@@ -374,14 +330,27 @@ export class Kirimi implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['device'],
-						operation: ['connectDevice', 'deviceStatus', 'renewDevice'],
+						operation: ['deviceStatus', 'deviceStatusEnhanced'],
 					},
 				},
 				default: '',
 				description: 'The WhatsApp device ID to use',
 			},
+			{
+				displayName: 'Device ID',
+				name: 'deviceId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['waba'],
+					},
+				},
+				default: '',
+				description: 'The WABA device ID to use',
+			},
 
-			// OTP Fields
+			// ── OTP V1 Fields ────────────────────────────────────────────────────────
 			{
 				displayName: 'Phone Number',
 				name: 'phone',
@@ -390,6 +359,7 @@ export class Kirimi implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['otp'],
+						operation: ['generateOtp', 'validateOtp'],
 					},
 				},
 				default: '',
@@ -408,33 +378,6 @@ export class Kirimi implements INodeType {
 				},
 				default: '',
 				description: 'The OTP code to validate',
-			},
-			{
-				displayName: 'Enable Typing Effect',
-				name: 'enableTypingEffect',
-				type: 'boolean',
-				displayOptions: {
-					show: {
-						resource: ['otp'],
-						operation: ['generateOtp'],
-					},
-				},
-				default: true,
-				description: 'Whether to enable typing effect',
-			},
-			{
-				displayName: 'Typing Speed (Ms)',
-				name: 'typingSpeedMs',
-				type: 'number',
-				displayOptions: {
-					show: {
-						resource: ['otp'],
-						operation: ['generateOtp'],
-						enableTypingEffect: [true],
-					},
-				},
-				default: 50,
-				description: 'Typing speed in milliseconds',
 			},
 			{
 				displayName: 'OTP Length',
@@ -460,34 +403,12 @@ export class Kirimi implements INodeType {
 					},
 				},
 				options: [
-					{
-						name: 'Numeric',
-						value: 'numeric',
-					},
-					{
-						name: 'Alphabetic',
-						value: 'alphabetic',
-					},
-					{
-						name: 'Alphanumeric',
-						value: 'alphanumeric',
-					},
+					{ name: 'Numeric', value: 'numeric' },
+					{ name: 'Alphabetic', value: 'alphabetic' },
+					{ name: 'Alphanumeric', value: 'alphanumeric' },
 				],
 				default: 'numeric',
 				description: 'Type of OTP to generate',
-			},
-			{
-				displayName: 'Custom OTP Text',
-				name: 'customOtpText',
-				type: 'string',
-				displayOptions: {
-					show: {
-						resource: ['otp'],
-						operation: ['generateOtp'],
-					},
-				},
-				default: '',
-				description: 'Custom OTP text (optional)',
 			},
 			{
 				displayName: 'Custom OTP Message',
@@ -503,9 +424,9 @@ export class Kirimi implements INodeType {
 				description: 'Custom message template (must contain {otp})',
 			},
 
-			// OTP V2 Fields
+			// ── OTP V2 Fields ────────────────────────────────────────────────────────
 			{
-				displayName: 'Phone Number (V2)',
+				displayName: 'Phone Number',
 				name: 'phoneV2',
 				type: 'string',
 				required: true,
@@ -533,12 +454,12 @@ export class Kirimi implements INodeType {
 					{
 						name: 'WABA (Central) - Rp 400/OTP',
 						value: 'waba',
-						description: 'Use Kirimi WABA (high reliability, template-based, costs Rp 400/OTP)',
+						description: 'Use Kirimi WABA (high reliability, template-based)',
 					},
 					{
 						name: 'Device (Own Device) - Free',
 						value: 'device',
-						description: 'Use your own device (free, customizable, uses device quota)',
+						description: 'Use your own device (free, customizable)',
 					},
 				],
 				default: 'waba',
@@ -613,19 +534,19 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'The 6-digit OTP code to verify',
+				description: 'The OTP code to verify',
 			},
 
-			// Message Fields
+			// ── Message Fields ───────────────────────────────────────────────────────
 			{
-				displayName: 'Receiver',
-				name: 'receiver',
+				displayName: 'Phone Number',
+				name: 'phone',
 				type: 'string',
 				required: true,
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendMessage', 'sendMessageFast'],
+						operation: ['sendMessage', 'sendMessageFast', 'sendMessageFile'],
 					},
 				},
 				default: '',
@@ -670,65 +591,53 @@ export class Kirimi implements INodeType {
 				default: '',
 				description: 'Custom file name for the media (optional)',
 			},
+
+			// ── Send Message File Fields ─────────────────────────────────────────────
 			{
-				displayName: 'Quoted Message ID',
-				name: 'quotedMessageId',
+				displayName: 'Binary Property',
+				name: 'binaryPropertyName',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['sendMessageFile'],
+					},
+				},
+				default: 'data',
+				description: 'Name of the binary property containing the file from a previous node',
+			},
+			{
+				displayName: 'Message',
+				name: 'messageFile',
 				type: 'string',
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendMessage', 'sendMessageFast'],
+						operation: ['sendMessageFile'],
 					},
 				},
 				default: '',
-				description: 'Message ID to quote/reply to (optional)',
+				description: 'Optional caption/message to accompany the file',
 			},
 			{
-				displayName: 'Enable Typing Effect',
-				name: 'enableTypingEffect',
-				type: 'boolean',
+				displayName: 'File Name Override',
+				name: 'fileNameOverride',
+				type: 'string',
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendMessage'],
+						operation: ['sendMessageFile'],
 					},
 				},
-				default: true,
-				description: 'Whether to enable typing effect',
-			},
-			{
-				displayName: 'Typing Speed (Ms)',
-				name: 'typingSpeedMs',
-				type: 'number',
-				displayOptions: {
-					show: {
-						resource: ['message'],
-						operation: ['sendMessage'],
-						enableTypingEffect: [true],
-					},
-				},
-				default: 50,
-				description: 'Typing speed in milliseconds',
+				default: '',
+				description: 'Override the file name (optional)',
 			},
 
-			// Broadcast Fields
-			{
-				displayName: 'Label',
-				name: 'label',
-				type: 'string',
-				required: true,
-				displayOptions: {
-					show: {
-						resource: ['message'],
-						operation: ['broadcastMessage'],
-					},
-				},
-				default: '',
-				description: 'Label for the broadcast',
-			},
+			// ── Broadcast Fields ─────────────────────────────────────────────────────
 			{
 				displayName: 'Phone Numbers',
-				name: 'numbers',
+				name: 'phones',
 				type: 'string',
 				required: true,
 				displayOptions: {
@@ -738,12 +647,13 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'Comma-separated phone numbers (max 500 for free, 2000 for premium)',
+				description: 'Comma-separated phone numbers (e.g. 628111,628222,628333)',
 			},
 			{
 				displayName: 'Broadcast Message',
 				name: 'message',
 				type: 'string',
+				required: true,
 				displayOptions: {
 					show: {
 						resource: ['message'],
@@ -751,20 +661,7 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'Text message (required if media_url is empty)',
-			},
-			{
-				displayName: 'Media URL',
-				name: 'mediaUrl',
-				type: 'string',
-				displayOptions: {
-					show: {
-						resource: ['message'],
-						operation: ['broadcastMessage'],
-					},
-				},
-				default: '',
-				description: 'URL for media (image, video, document)',
+				description: 'Text message to broadcast',
 			},
 			{
 				displayName: 'Delay (Seconds)',
@@ -777,91 +674,10 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: 30,
-				description: 'Delay between messages in seconds (minimum 30)',
-			},
-			{
-				displayName: 'Delay Min (Seconds)',
-				name: 'delayMin',
-				type: 'number',
-				displayOptions: {
-					show: {
-						resource: ['message'],
-						operation: ['broadcastMessage'],
-					},
-				},
-				default: '',
-				description: 'Minimum delay (optional)',
-			},
-			{
-				displayName: 'Delay Max (Seconds)',
-				name: 'delayMax',
-				type: 'number',
-				displayOptions: {
-					show: {
-						resource: ['message'],
-						operation: ['broadcastMessage'],
-					},
-				},
-				default: '',
-				description: 'Maximum delay (optional)',
-			},
-			{
-				displayName: 'Start Time',
-				name: 'startedAt',
-				type: 'dateTime',
-				displayOptions: {
-					show: {
-						resource: ['message'],
-						operation: ['broadcastMessage'],
-					},
-				},
-				default: '',
-				description: 'When to start the broadcast (optional)',
+				description: 'Delay between messages in seconds (optional)',
 			},
 
-			// Device Fields
-			{
-				displayName: 'Package ID',
-				name: 'packageId',
-				type: 'number',
-				required: true,
-				displayOptions: {
-					show: {
-						resource: ['device'],
-						operation: ['createDevice', 'renewDevice'],
-					},
-				},
-				default: 1,
-				description: 'Package ID for the device',
-			},
-			{
-				displayName: 'Voucher Code',
-				name: 'voucherCode',
-				type: 'string',
-				displayOptions: {
-					show: {
-						resource: ['device'],
-						operation: ['createDevice', 'renewDevice'],
-					},
-				},
-				default: '',
-				description: 'Voucher code (optional)',
-			},
-
-			// Contact Fields
-			{
-				displayName: 'Contact Name',
-				name: 'name',
-				type: 'string',
-				required: true,
-				displayOptions: {
-					show: {
-						resource: ['contact'],
-						operation: ['saveContact'],
-					},
-				},
-				default: '',
-			},
+			// ── Contact Fields ───────────────────────────────────────────────────────
 			{
 				displayName: 'Phone Number',
 				name: 'phone',
@@ -874,6 +690,20 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
+				description: 'Phone number of the contact',
+			},
+			{
+				displayName: 'Contact Name',
+				name: 'name',
+				type: 'string',
+				displayOptions: {
+					show: {
+						resource: ['contact'],
+						operation: ['saveContact'],
+					},
+				},
+				default: '',
+				description: 'Contact name (optional)',
 			},
 			{
 				displayName: 'Email',
@@ -889,78 +719,29 @@ export class Kirimi implements INodeType {
 				default: '',
 				description: 'Email address (optional)',
 			},
+
+			// ── Package Fields ───────────────────────────────────────────────────────
 			{
-				displayName: 'Company',
-				name: 'company',
-				type: 'string',
+				displayName: 'Deposit Status',
+				name: 'depositStatus',
+				type: 'options',
 				displayOptions: {
 					show: {
-						resource: ['contact'],
-						operation: ['saveContact'],
+						resource: ['package'],
+						operation: ['listDeposits'],
 					},
 				},
+				options: [
+					{ name: 'All', value: '' },
+					{ name: 'Paid', value: 'paid' },
+					{ name: 'Unpaid', value: 'unpaid' },
+					{ name: 'Expired', value: 'expired' },
+				],
 				default: '',
-				description: 'Company name (optional)',
-			},
-			{
-				displayName: 'Contacts',
-				name: 'contacts',
-				type: 'string',
-				required: true,
-				displayOptions: {
-					show: {
-						resource: ['contact'],
-						operation: ['saveContactsBulk'],
-					},
-				},
-				default: '',
-				description: 'JSON array of contacts with name, phone, email, company fields',
+				description: 'Filter deposits by status (optional)',
 			},
 
-			// Package Fields
-			{
-				displayName: 'Amount',
-				name: 'amount',
-				type: 'number',
-				required: true,
-				displayOptions: {
-					show: {
-						resource: ['package'],
-						operation: ['createDeposit'],
-					},
-				},
-				default: 1,
-				description: 'Deposit amount',
-			},
-			{
-				displayName: 'Payment Method',
-				name: 'paymentMethod',
-				type: 'string',
-				required: true,
-				displayOptions: {
-					show: {
-						resource: ['package'],
-						operation: ['createDeposit'],
-					},
-				},
-				default: '',
-			},
-			{
-				displayName: 'Deposit ID',
-				name: 'depositId',
-				type: 'string',
-				required: true,
-				displayOptions: {
-					show: {
-						resource: ['package'],
-						operation: ['depositStatus'],
-					},
-				},
-				default: '',
-				description: 'Deposit ID to check status',
-			},
-
-			// Utility Fields
+			// ── WABA Fields ──────────────────────────────────────────────────────────
 			{
 				displayName: 'Phone Number',
 				name: 'phone',
@@ -968,12 +749,24 @@ export class Kirimi implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						resource: ['utility'],
-						operation: ['testPhoneNormalization'],
+						resource: ['waba'],
 					},
 				},
 				default: '',
-				description: 'Phone number to normalize',
+				description: 'Recipient phone number',
+			},
+			{
+				displayName: 'Message',
+				name: 'message',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['waba'],
+					},
+				},
+				default: '',
+				description: 'Text message to send via WABA',
 			},
 		],
 	};
@@ -997,19 +790,17 @@ export class Kirimi implements INodeType {
 			try {
 				if (resource === 'otp') {
 					if (operation === 'generateOtp') {
-						endpoint = '/generate-otp';
+						endpoint = '/v1/generate-otp';
 						body.device_id = this.getNodeParameter('deviceId', i);
 						body.phone = this.getNodeParameter('phone', i);
-						body.enableTypingEffect = this.getNodeParameter('enableTypingEffect', i);
-						body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i);
-						body.otpLength = this.getNodeParameter('otpLength', i);
-						body.otpType = this.getNodeParameter('otpType', i);
-						const customOtpText = this.getNodeParameter('customOtpText', i) as string;
-						if (customOtpText) body.customOtpText = customOtpText;
+						const otpLength = this.getNodeParameter('otpLength', i) as number;
+						if (otpLength) body.otp_length = otpLength;
+						const otpType = this.getNodeParameter('otpType', i) as string;
+						if (otpType) body.otp_type = otpType;
 						const customOtpMessage = this.getNodeParameter('customOtpMessage', i) as string;
 						if (customOtpMessage) body.customOtpMessage = customOtpMessage;
 					} else if (operation === 'validateOtp') {
-						endpoint = '/validate-otp';
+						endpoint = '/v1/validate-otp';
 						body.device_id = this.getNodeParameter('deviceId', i);
 						body.phone = this.getNodeParameter('phone', i);
 						body.otp = this.getNodeParameter('otp', i);
@@ -1020,7 +811,6 @@ export class Kirimi implements INodeType {
 						const appName = this.getNodeParameter('appName', i) as string;
 						if (appName) body.app_name = appName;
 
-						// Add method-specific parameters
 						if (body.method === 'waba') {
 							const templateCode = this.getNodeParameter('templateCode', i) as string;
 							if (templateCode) body.template_code = templateCode;
@@ -1036,120 +826,112 @@ export class Kirimi implements INodeType {
 					}
 				} else if (resource === 'message') {
 					if (operation === 'sendMessage') {
-						endpoint = '/send-message';
+						endpoint = '/v1/send-message';
 						body.device_id = this.getNodeParameter('deviceId', i);
-						body.receiver = this.getNodeParameter('receiver', i);
+						body.phone = this.getNodeParameter('phone', i);
 						const message = this.getNodeParameter('message', i) as string;
 						if (message) body.message = message;
 						const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
 						if (mediaUrl) body.media_url = mediaUrl;
 						const fileName = this.getNodeParameter('fileName', i) as string;
 						if (fileName) body.fileName = fileName;
-						const quotedMessageId = this.getNodeParameter('quotedMessageId', i) as string;
-						if (quotedMessageId) body.quotedMessageId = quotedMessageId;
-						body.enableTypingEffect = this.getNodeParameter('enableTypingEffect', i);
-						body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i);
 					} else if (operation === 'sendMessageFast') {
-						endpoint = '/send-message-fast';
+						endpoint = '/v1/send-message-fast';
 						body.device_id = this.getNodeParameter('deviceId', i);
-						body.receiver = this.getNodeParameter('receiver', i);
+						body.phone = this.getNodeParameter('phone', i);
 						const message = this.getNodeParameter('message', i) as string;
 						if (message) body.message = message;
 						const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
 						if (mediaUrl) body.media_url = mediaUrl;
 						const fileName = this.getNodeParameter('fileName', i) as string;
 						if (fileName) body.fileName = fileName;
-						const quotedMessageId = this.getNodeParameter('quotedMessageId', i) as string;
-						if (quotedMessageId) body.quotedMessageId = quotedMessageId;
+					} else if (operation === 'sendMessageFile') {
+						endpoint = '/v1/send-message-file';
+						const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
+						const item = items[i];
+
+						if (!item.binary || !item.binary[binaryPropertyName]) {
+							throw new NodeOperationError(
+								this.getNode(),
+								`No binary data found for property "${binaryPropertyName}"`,
+								{ itemIndex: i },
+							);
+						}
+
+						const binaryData = item.binary[binaryPropertyName];
+						const fileBuffer = await this.helpers.getBinaryDataBuffer(i, binaryPropertyName);
+						const fileNameOverride = this.getNodeParameter('fileNameOverride', i) as string;
+						const resolvedFileName = fileNameOverride || binaryData.fileName || 'file';
+						const messageFile = this.getNodeParameter('messageFile', i) as string;
+
+						const formData: IDataObject = {
+							user_code: credentials.userCode as string,
+							secret: credentials.secret as string,
+							device_id: this.getNodeParameter('deviceId', i) as string,
+							phone: this.getNodeParameter('phone', i) as string,
+							file: {
+								value: fileBuffer,
+								options: {
+									filename: resolvedFileName,
+									contentType: binaryData.mimeType,
+								},
+							},
+						};
+						if (messageFile) formData.message = messageFile;
+						if (resolvedFileName) formData.fileName = resolvedFileName;
+
+						const responseData = await this.helpers.httpRequest({
+							method: 'POST',
+							url: `${credentials.baseUrl}${endpoint}`,
+							formData,
+						});
+						returnData.push(responseData as IDataObject);
+						continue;
 					} else if (operation === 'broadcastMessage') {
-						endpoint = '/broadcast-message';
+						endpoint = '/v1/broadcast-message';
 						body.device_id = this.getNodeParameter('deviceId', i);
-						body.label = this.getNodeParameter('label', i);
-						const numbersString = this.getNodeParameter('numbers', i) as string;
-						body.numbers = numbersString.split(',').map((num: string) => num.trim());
-						const message = this.getNodeParameter('message', i) as string;
-						if (message) body.message = message;
-						const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
-						if (mediaUrl) body.media_url = mediaUrl;
-						body.delay = this.getNodeParameter('delay', i);
-						const delayMin = this.getNodeParameter('delayMin', i) as number;
-						if (delayMin) body.delayMin = delayMin;
-						const delayMax = this.getNodeParameter('delayMax', i) as number;
-						if (delayMax) body.delayMax = delayMax;
-						const startedAt = this.getNodeParameter('startedAt', i) as string;
-						if (startedAt) body.started_at = startedAt;
+						body.phones = this.getNodeParameter('phones', i);
+						body.message = this.getNodeParameter('message', i);
+						const delay = this.getNodeParameter('delay', i) as number;
+						if (delay) body.delay = delay;
 					}
 				} else if (resource === 'device') {
-					if (operation === 'createDevice') {
-						endpoint = '/create-device';
-						body.package_id = this.getNodeParameter('packageId', i);
-						const voucherCode = this.getNodeParameter('voucherCode', i) as string;
-						if (voucherCode) body.voucher_code = voucherCode;
-					} else if (operation === 'connectDevice') {
-						endpoint = '/connect-device';
+					if (operation === 'deviceStatus') {
+						endpoint = '/v1/device-status';
 						body.device_id = this.getNodeParameter('deviceId', i);
-					} else if (operation === 'deviceStatus') {
-						endpoint = '/device-status';
+					} else if (operation === 'deviceStatusEnhanced') {
+						endpoint = '/v1/device-status-enhanced';
 						body.device_id = this.getNodeParameter('deviceId', i);
 					} else if (operation === 'listDevices') {
-						endpoint = '/list-devices';
-					} else if (operation === 'renewDevice') {
-						endpoint = '/renew-device';
-						body.device_id = this.getNodeParameter('deviceId', i);
-						body.package_id = this.getNodeParameter('packageId', i);
-						const voucherCode = this.getNodeParameter('voucherCode', i) as string;
-						if (voucherCode) body.voucher_code = voucherCode;
+						endpoint = '/v1/list-devices';
 					}
 				} else if (resource === 'contact') {
 					if (operation === 'saveContact') {
-						endpoint = '/save-contact';
-						body.device_id = this.getNodeParameter('deviceId', i);
-						body.name = this.getNodeParameter('name', i);
+						endpoint = '/v1/save-contact';
 						body.phone = this.getNodeParameter('phone', i);
+						const name = this.getNodeParameter('name', i) as string;
+						if (name) body.name = name;
 						const email = this.getNodeParameter('email', i) as string;
 						if (email) body.email = email;
-						const company = this.getNodeParameter('company', i) as string;
-						if (company) body.company = company;
-					} else if (operation === 'saveContactsBulk') {
-						endpoint = '/save-contacts-bulk';
-						body.device_id = this.getNodeParameter('deviceId', i);
-						const contactsString = this.getNodeParameter('contacts', i) as string;
-						try {
-							body.contacts = JSON.parse(contactsString);
-						} catch (error) {
-							throw new NodeOperationError(this.getNode(), 'Invalid JSON format for contacts');
-						}
 					}
 				} else if (resource === 'package') {
 					if (operation === 'listPackages') {
-						endpoint = '/list-packages';
-					} else if (operation === 'createDeposit') {
-						endpoint = '/create-deposit';
-						body.amount = this.getNodeParameter('amount', i);
-						body.payment_method = this.getNodeParameter('paymentMethod', i);
-					} else if (operation === 'depositStatus') {
-						endpoint = '/deposit-status';
-						body.deposit_id = this.getNodeParameter('depositId', i);
+						endpoint = '/v1/list-packages';
+					} else if (operation === 'listDeposits') {
+						endpoint = '/v1/list-deposits';
+						const depositStatus = this.getNodeParameter('depositStatus', i) as string;
+						if (depositStatus) body.status = depositStatus;
 					}
 				} else if (resource === 'user') {
 					if (operation === 'userInfo') {
-						endpoint = '/user-info';
+						endpoint = '/v1/user-info';
 					}
-				} else if (resource === 'security') {
-					if (operation === 'otpSecurityStatus') {
-						endpoint = '/otp-security-status';
-					} else if (operation === 'merchantReputation') {
-						endpoint = '/merchant-reputation';
-					} else if (operation === 'customerOtpStats') {
-						endpoint = '/customer-otp-stats';
-					}
-				} else if (resource === 'utility') {
-					if (operation === 'testPhoneNormalization') {
-						endpoint = '/test-phone-normalization';
+				} else if (resource === 'waba') {
+					if (operation === 'sendWabaMessage') {
+						endpoint = '/v1/waba/send-message';
+						body.device_id = this.getNodeParameter('deviceId', i);
 						body.phone = this.getNodeParameter('phone', i);
-						// Remove auth fields for this endpoint
-						delete body.user_code;
-						delete body.secret;
+						body.message = this.getNodeParameter('message', i);
 					}
 				}
 

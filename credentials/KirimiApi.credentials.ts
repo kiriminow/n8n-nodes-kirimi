@@ -32,8 +32,9 @@ export class KirimiApi implements ICredentialType {
 			name: 'baseUrl',
 			type: 'string',
 			required: true,
-			default: 'https://api.kirimi.id/v1',
-			description: 'The base URL for the Kirimi API',
+			default: 'https://api.kirimi.id',
+			placeholder: 'https://api.kirimi.id',
+			description: 'The base URL for the Kirimi API (without version prefix)',
 		},
 	];
 
@@ -50,7 +51,7 @@ export class KirimiApi implements ICredentialType {
 	test: ICredentialTestRequest = {
 		request: {
 			baseURL: '={{$credentials.baseUrl}}',
-			url: '/user-info',
+			url: '/v1/user-info',
 			method: 'POST',
 		},
 	};

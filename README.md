@@ -4,47 +4,38 @@ This is an n8n community node for integrating with the Kirimi WhatsApp Unofficia
 
 ## Features
 
-The Kirimi node provides comprehensive integration with Kirimi's WhatsApp Unofficial API, including:
+The Kirimi node provides comprehensive integration with Kirimi's WhatsApp API, including:
 
 ### OTP Management
 - **OTP V2 (Recommended)**: Dual method support (WABA Central or Device)
   - WABA Method: High reliability, Rp 400/OTP
   - Device Method: Free, customizable messages
 - OTP V1: Legacy generate and validate OTP
-- Customizable OTP length, type, and messages
+- Customizable OTP length, type, and custom message
 
 ### Message Sending
-- Send individual WhatsApp messages
-- Send messages in fast mode (no typing effect)
-- Broadcast messages to multiple recipients
-- Support for text and media messages
+- Send individual WhatsApp messages (`send-message`)
+- Send messages in fast mode — no typing effect (`send-message-fast`)
+- Send file via multipart upload, max 50MB (`send-message-file`)
+- Broadcast messages to multiple recipients (`broadcast-message`)
+
+### WABA (WhatsApp Business API)
+- Send messages via Meta Cloud API (`waba/send-message`)
 
 ### Device Management
-- Create new WhatsApp devices
-- Connect devices via QR code
-- Check device status
-- List all devices
-- Renew device subscriptions
+- Check device connection status (`device-status`)
+- Get full device details (`device-status-enhanced`)
+- List all devices (`list-devices`)
 
 ### Contact Management
-- Save individual contacts
-- Bulk save multiple contacts
+- Save a single contact (`save-contact`)
 
 ### Package & Billing
-- List available packages
-- Create deposits for top-up
-- Check deposit status
+- List available packages (`list-packages`)
+- List deposit history with optional status filter (`list-deposits`)
 
 ### User Information
-- Get user account information
-
-### Security & Monitoring
-- Check OTP security status
-- Get merchant reputation
-- View customer OTP statistics
-
-### Utilities
-- Test phone number normalization
+- Get user account information (`user-info`)
 
 ### Webhook Trigger (NEW!)
 - Receive webhook events from Kirimi
@@ -67,7 +58,7 @@ The Kirimi node provides comprehensive integration with Kirimi's WhatsApp Unoffi
 1. Create Kirimi API credentials in n8n:
    - User Code: Your Kirimi API user code
    - Secret: Your Kirimi API secret key
-   - Base URL: https://api.kirimi.id/v1 (default)
+   - Base URL: https://api.kirimi.id (default, no version prefix)
 
 2. Get your credentials from [Kirimi Documentation](https://dash.kirimi.id/docs)
 
