@@ -880,10 +880,11 @@ export class Kirimi implements INodeType {
 						if (messageFile) formData.message = messageFile;
 						if (resolvedFileName) formData.fileName = resolvedFileName;
 
-						const responseData = await this.helpers.httpRequest({
+						const responseData = await this.helpers.request({
 							method: 'POST',
 							url: `${credentials.baseUrl}${endpoint}`,
 							formData,
+							json: true,
 						});
 						returnData.push(responseData as IDataObject);
 						continue;
