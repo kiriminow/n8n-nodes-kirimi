@@ -33,7 +33,7 @@ export class KirimiApi implements ICredentialType {
 			type: 'string',
 			required: true,
 			default: 'https://api.kirimi.id',
-			placeholder: 'https://api.kirimi.id',
+			placeholder: 'https://api.kirimi.ID',
 			description: 'The base URL for the Kirimi API (without version prefix)',
 		},
 	];
