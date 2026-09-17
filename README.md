@@ -7,9 +7,12 @@ This is an n8n community node for integrating with the Kirimi WhatsApp Unofficia
 The Kirimi node provides comprehensive integration with Kirimi's WhatsApp API, including:
 
 ### OTP Management
-- **OTP V2 (Recommended)**: Dual method support (WABA Central or Device)
-  - WABA Method: High reliability, Rp 400/OTP
-  - Device Method: Free, customizable messages
+- **OTP V2 (Recommended)**: Three method support
+  - WhatsApp (Kirimi channel): billed per delivered OTP
+  - Device: use your own device, free and customizable
+  - WABA User: use your own WABA with an approved AUTHENTICATION template
+- Verify OTP V2 (`v2/otp/verify`)
+- **OTP Reverse**: create a reverse OTP request and check its status (`v2/otp-reverse/create`, `v2/otp-reverse/status`)
 - OTP V1: Legacy generate and validate OTP
 - Customizable OTP length, type, and custom message
 
@@ -17,22 +20,33 @@ The Kirimi node provides comprehensive integration with Kirimi's WhatsApp API, i
 - Send individual WhatsApp messages (`send-message`)
 - Send messages in fast mode — no typing effect (`send-message-fast`)
 - Send file via multipart upload, max 50MB (`send-message-file`)
-- Broadcast messages to multiple recipients (`broadcast-message`)
+- Broadcast messages to multiple recipients (`broadcast-message`) with label, delays and scheduling
 
 ### WABA (WhatsApp Business API)
-- Send messages via Meta Cloud API (`waba/send-message`)
+- Send template messages via Meta Cloud API (`waba/send-message`)
+- Reply within a conversation (`waba/messages/reply`)
+- List conversations (`waba/conversations`)
+- Sync message templates (`waba/templates/sync`)
+- Send and verify OTP via WABA (`waba/send-otp`, `waba/verify-otp`)
 
 ### Device Management
+- Create a device (`create-device`)
+- Connect a device (`connect-device`)
+- Renew a device (`renew-device`)
 - Check device connection status (`device-status`)
 - Get full device details (`device-status-enhanced`)
 - List all devices (`list-devices`)
 
 ### Contact Management
 - Save a single contact (`save-contact`)
+- Save up to 1000 contacts at once (`save-contacts-bulk`)
 
-### Package & Billing
+### Package, Deposit & Billing
 - List available packages (`list-packages`)
-- List deposit history with optional status filter (`list-deposits`)
+- Create a deposit and get the payment link (`create-deposit`)
+- Check a deposit status (`deposit-status`)
+- Cancel an unpaid deposit (`cancel-deposit`)
+- List deposits with optional status filter (`list-deposits`)
 
 ### User Information
 - Get user account information (`user-info`)
