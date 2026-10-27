@@ -8,7 +8,29 @@ import {
 	NodeOperationError,
 } from 'n8n-workflow';
 
-import { kirimiApiRequest } from './GenericFunctions';
+import { kirimiApiRequest, wrapKirimiError } from './GenericFunctions';
+import {
+	DEVICE_EVENTS,
+	MAX_SUBSCRIPTION_EVENTS,
+	WABA_EVENTS,
+	deviceEventOptions,
+	wabaEventOptions,
+} from './events';
+
+const CLIENT_MSG_ID_REGEX = /^[A-Za-z0-9._:-]{1,128}$/;
+
+function getClientMsgId(ctx: IExecuteFunctions, i: number): string {
+	const value = (ctx.getNodeParameter('clientMsgId', i, '') as string).trim();
+	if (!value) return '';
+	if (!CLIENT_MSG_ID_REGEX.test(value)) {
+		throw new NodeOperationError(
+			ctx.getNode(),
+			'Client Message ID must be 1-128 characters of letters, digits, ".", "_", ":" or "-"',
+			{ itemIndex: i },
+		);
+	}
+	return value;
+}
 
 function splitList(value: unknown): string[] {
 	if (typeof value !== 'string') {
@@ -38,7 +60,7 @@ export class Kirimi implements INodeType {
 		group: ['communication'],
 		version: 1,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
-		description: 'Interact with the Kirimi WhatsApp API (Unofficial, WABA, OTP, Devices, Deposits)',
+		description: 'Interact with the Kirimi WhatsApp API (QR devices, WABA, OTP, Devices, Deposits, Webhooks)',
 		defaults: {
 			name: 'Kirimi',
 		},
@@ -96,6 +118,11 @@ export class Kirimi implements INodeType {
 						name: 'WABA',
 						value: 'waba',
 						description: 'WhatsApp Business API operations',
+					},
+					{
+						name: 'Webhook Subscription',
+						value: 'webhook',
+						description: 'Manage webhook subscriptions',
 					},
 				],
 				default: 'message',
@@ -168,6 +195,18 @@ export class Kirimi implements INodeType {
 				},
 				options: [
 					{
+						name: 'Broadcast Message',
+						value: 'broadcastMessage',
+						description: 'Send a message to multiple recipients',
+						action: 'Broadcast a message',
+					},
+					{
+						name: 'Get Message Status',
+						value: 'messageStatus',
+						description: 'Look up the delivery state of a message by its Client Message ID',
+						action: 'Get message status',
+					},
+					{
 						name: 'Send Message',
 						value: 'sendMessage',
 						description: 'Send a WhatsApp message',
@@ -184,12 +223,6 @@ export class Kirimi implements INodeType {
 						value: 'sendMessageFile',
 						description: 'Send a file via multipart upload (max 50MB)',
 						action: 'Send a message with file',
-					},
-					{
-						name: 'Broadcast Message',
-						value: 'broadcastMessage',
-						description: 'Send a message to multiple recipients',
-						action: 'Broadcast a message',
 					},
 				],
 				default: 'sendMessage',
@@ -424,6 +457,41 @@ export class Kirimi implements INodeType {
 				required: true,
 			},
 
+			// ── Webhook Subscription Operations ──────────────────────────────────────
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+					},
+				},
+				options: [
+					{
+						name: 'List Events',
+						value: 'listEvents',
+						description: 'List recent webhook events for a device or WABA',
+						action: 'List webhook events',
+					},
+					{
+						name: 'Subscribe',
+						value: 'subscribe',
+						description: 'Register a webhook subscription',
+						action: 'Subscribe to webhook events',
+					},
+					{
+						name: 'Unsubscribe',
+						value: 'unsubscribe',
+						description: 'Remove a webhook subscription',
+						action: 'Unsubscribe from webhook events',
+					},
+				],
+				default: 'subscribe',
+				required: true,
+			},
+
 			// ── Shared Device ID ─────────────────────────────────────────────────────
 			{
 				displayName: 'Device ID',
@@ -447,7 +515,7 @@ export class Kirimi implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendMessage', 'sendMessageFast', 'sendMessageFile', 'broadcastMessage'],
+						operation: ['sendMessage', 'sendMessageFast', 'sendMessageFile', 'broadcastMessage', 'messageStatus'],
 					},
 				},
 				default: '',
@@ -864,7 +932,7 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'URL for media (image, video, document)',
+				description: 'URL for media (image, video, document). For broadcasts, the message becomes optional when a media URL is given.',
 			},
 			{
 				displayName: 'File Name',
@@ -873,7 +941,7 @@ export class Kirimi implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendMessage', 'sendMessageFast', 'broadcastMessage'],
+						operation: ['sendMessage', 'sendMessageFast'],
 					},
 				},
 				default: '',
@@ -899,7 +967,7 @@ export class Kirimi implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendMessage', 'broadcastMessage'],
+						operation: ['sendMessage'],
 					},
 				},
 				default: false,
@@ -912,11 +980,39 @@ export class Kirimi implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendMessage', 'broadcastMessage'],
+						operation: ['sendMessage'],
 					},
 				},
 				default: 350,
 				description: 'Typing speed in milliseconds (100-800)',
+			},
+
+			{
+				displayName: 'Client Message ID',
+				name: 'clientMsgId',
+				type: 'string',
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['sendMessage', 'sendMessageFast', 'sendMessageFile'],
+					},
+				},
+				default: '',
+				description: 'Idempotency key, 1-128 characters of [A-Za-z0-9._:-]. Retries with the same key within 24 hours never send the message twice. Use it with Get Message Status.',
+			},
+			{
+				displayName: 'Client Message ID',
+				name: 'clientMsgId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['messageStatus'],
+					},
+				},
+				default: '',
+				description: 'The Client Message ID used when the message was sent',
 			},
 
 			// ── Send Message File Fields ─────────────────────────────────────────────
@@ -988,14 +1084,13 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'Recipient numbers separated by comma or newline (max 1000)',
+				description: 'Recipient numbers separated by comma or newline. Max 1000 numbers per call (package cap: 500 free, 2000 paid). Duplicates are removed.',
 				placeholder: '628111,628222,628333',
 			},
 			{
 				displayName: 'Broadcast Message',
 				name: 'message',
 				type: 'string',
-				required: true,
 				displayOptions: {
 					show: {
 						resource: ['message'],
@@ -1003,7 +1098,7 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'Text message to broadcast',
+				description: 'Text message to broadcast (optional when a Media URL is given)',
 			},
 			{
 				displayName: 'Delay (Seconds)',
@@ -1016,7 +1111,7 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: 30,
-				description: 'Delay between messages in seconds (clamped 30-3600)',
+				description: 'Delay between messages in seconds (clamped to 30-3600). Max 10 broadcasts per hour.',
 			},
 			{
 				displayName: 'Delay Min (Seconds)',
@@ -1056,6 +1151,174 @@ export class Kirimi implements INodeType {
 				},
 				default: '',
 				description: 'ISO-8601 timestamp to schedule the broadcast (optional)',
+			},
+
+			// ── Webhook Subscription Fields ──────────────────────────────────────────
+			{
+				displayName: 'Scope',
+				name: 'webhookScope',
+				type: 'options',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['subscribe', 'listEvents'],
+					},
+				},
+				options: [
+					{ name: 'Device (QR)', value: 'device' },
+					{ name: 'WABA', value: 'waba' },
+				],
+				default: 'device',
+				description: 'Whether the subscription belongs to a QR device or a WABA',
+			},
+			{
+				displayName: 'Device ID',
+				name: 'webhookDeviceId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['subscribe', 'listEvents'],
+						webhookScope: ['device'],
+					},
+				},
+				default: '',
+				description: 'The WhatsApp device ID',
+			},
+			{
+				displayName: 'WABA ID',
+				name: 'webhookWabaId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['subscribe', 'listEvents'],
+						webhookScope: ['waba'],
+					},
+				},
+				default: '',
+				description: 'Your WABA ID',
+			},
+			{
+				displayName: 'Target URL',
+				name: 'targetUrl',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['subscribe'],
+					},
+				},
+				default: '',
+				placeholder: 'https://example.com/webhook',
+				description: 'HTTPS URL that receives the events (max 500 chars). The response includes a signing secret that is returned only once, so store it.',
+			},
+			{
+				displayName: 'Events',
+				name: 'webhookDeviceEvents',
+				type: 'multiOptions',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['subscribe'],
+						webhookScope: ['device'],
+					},
+				},
+				options: deviceEventOptions(),
+				default: ['message'],
+				description: 'Events to subscribe to (1-20)',
+			},
+			{
+				displayName: 'Events',
+				name: 'webhookWabaEvents',
+				type: 'multiOptions',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['subscribe'],
+						webhookScope: ['waba'],
+					},
+				},
+				options: wabaEventOptions(),
+				default: ['message'],
+				description: 'Events to subscribe to (1-20)',
+			},
+			{
+				displayName: 'Label',
+				name: 'webhookLabel',
+				type: 'string',
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['subscribe'],
+					},
+				},
+				default: '',
+				description: 'Optional label for this subscription (max 100 chars)',
+			},
+			{
+				displayName: 'Subscription ID',
+				name: 'subscriptionId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['unsubscribe'],
+					},
+				},
+				default: '',
+				description: 'The subscription ID returned by Subscribe',
+			},
+			{
+				displayName: 'Event Filter',
+				name: 'webhookEventFilterDevice',
+				type: 'multiOptions',
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['listEvents'],
+						webhookScope: ['device'],
+					},
+				},
+				options: deviceEventOptions(),
+				default: [],
+				description: 'Only return these events (empty = all events)',
+			},
+			{
+				displayName: 'Event Filter',
+				name: 'webhookEventFilterWaba',
+				type: 'multiOptions',
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['listEvents'],
+						webhookScope: ['waba'],
+					},
+				},
+				options: wabaEventOptions(),
+				default: [],
+				description: 'Only return these events (empty = all events)',
+			},
+			{
+				displayName: 'Limit',
+				name: 'webhookEventsLimit',
+				type: 'number',
+				typeOptions: { minValue: 1, maxValue: 100 },
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['listEvents'],
+					},
+				},
+				default: 20,
+				description: 'Max number of events to return (1-100)',
 			},
 
 			// ── Contact Fields ───────────────────────────────────────────────────────
@@ -1422,7 +1685,8 @@ export class Kirimi implements INodeType {
 
 		for (let i = 0; i < items.length; i++) {
 			const body: IDataObject = {};
-			let endpoint = '';
+				const headers: IDataObject = {};
+				let endpoint = '';
 			const method: IHttpRequestMethods = 'POST';
 
 			// Add authentication to all requests
@@ -1507,10 +1771,12 @@ export class Kirimi implements INodeType {
 						if (quotedMessageId) body.quotedMessageId = quotedMessageId;
 						const enableTypingEffect = this.getNodeParameter('enableTypingEffect', i) as boolean;
 						if (enableTypingEffect) {
-							body.enableTypingEffect = enableTypingEffect;
-							body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i) as number;
-						}
-					} else if (operation === 'sendMessageFast') {
+								body.enableTypingEffect = enableTypingEffect;
+								body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i) as number;
+							}
+							const clientMsgId = getClientMsgId(this, i);
+							if (clientMsgId) headers['Idempotency-Key'] = clientMsgId;
+						} else if (operation === 'sendMessageFast') {
 						endpoint = '/v1/send-message-fast';
 						body.device_id = this.getNodeParameter('deviceId', i);
 						body.receiver = this.getNodeParameter('receiver', i);
@@ -1522,7 +1788,9 @@ export class Kirimi implements INodeType {
 						if (fileName) body.fileName = fileName;
 						const quotedMessageId = this.getNodeParameter('quotedMessageId', i) as string;
 						if (quotedMessageId) body.quotedMessageId = quotedMessageId;
-					} else if (operation === 'sendMessageFile') {
+							const clientMsgId = getClientMsgId(this, i);
+							if (clientMsgId) headers['Idempotency-Key'] = clientMsgId;
+						} else if (operation === 'sendMessageFile') {
 						endpoint = '/v1/send-message-file';
 						const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
 						const item = items[i];
@@ -1561,39 +1829,51 @@ export class Kirimi implements INodeType {
 						}
 						if (resolvedFileName) formData.fileName = resolvedFileName;
 						if (quotedMessageId) formData.quotedMessageId = quotedMessageId;
+							const clientMsgId = getClientMsgId(this, i);
+							if (clientMsgId) formData.clientMsgId = clientMsgId;
 
-						const responseData = await this.helpers.request({
-							method: 'POST',
-							url: `${credentials.baseUrl}${endpoint}`,
-							formData,
-							json: true,
-						});
-						returnData.push(responseData as IDataObject);
-						continue;
+							let responseData: unknown;
+							try {
+								responseData = await this.helpers.request({
+									method: 'POST',
+									url: `${credentials.baseUrl}${endpoint}`,
+									formData,
+									json: true,
+								});
+							} catch (requestError) {
+								throw wrapKirimiError(this.getNode(), requestError);
+							}
+							returnData.push(responseData as IDataObject);
+							continue;
 					} else if (operation === 'broadcastMessage') {
 						endpoint = '/v1/broadcast-message';
 						body.device_id = this.getNodeParameter('deviceId', i);
 						body.label = this.getNodeParameter('label', i);
 						body.numbers = splitList(this.getNodeParameter('numbers', i));
-						body.message = this.getNodeParameter('message', i);
-						const delay = this.getNodeParameter('delay', i) as number;
+						const broadcastMessage = this.getNodeParameter('message', i) as string;
+							const broadcastMediaUrl = this.getNodeParameter('mediaUrl', i) as string;
+							if (!broadcastMessage && !broadcastMediaUrl) {
+								throw new NodeOperationError(
+									this.getNode(),
+									'Provide a Broadcast Message, a Media URL, or both',
+									{ itemIndex: i },
+								);
+							}
+							if (broadcastMessage) body.message = broadcastMessage;
+							const delay = this.getNodeParameter('delay', i) as number;
 						if (delay) body.delay = delay;
 						const delayMin = this.getNodeParameter('delayMin', i) as number;
 						if (delayMin) body.delayMin = delayMin;
 						const delayMax = this.getNodeParameter('delayMax', i) as number;
 						if (delayMax) body.delayMax = delayMax;
-						const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
-						if (mediaUrl) body.media_url = mediaUrl;
-						const fileName = this.getNodeParameter('fileName', i) as string;
-						if (fileName) body.fileName = fileName;
-						const startedAt = this.getNodeParameter('startedAt', i) as string;
-						if (startedAt) body.started_at = startedAt;
-						const enableTypingEffect = this.getNodeParameter('enableTypingEffect', i) as boolean;
-						if (enableTypingEffect) {
-							body.enableTypingEffect = enableTypingEffect;
-							body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i) as number;
+						if (broadcastMediaUrl) body.media_url = broadcastMediaUrl;
+							const startedAt = this.getNodeParameter('startedAt', i) as string;
+							if (startedAt) body.started_at = startedAt;
+						} else if (operation === 'messageStatus') {
+							endpoint = '/v1/message-status';
+							body.device_id = this.getNodeParameter('deviceId', i);
+							body.clientMsgId = (this.getNodeParameter('clientMsgId', i) as string).trim();
 						}
-					}
 				} else if (resource === 'device') {
 					if (operation === 'createDevice') {
 						endpoint = '/v1/create-device';
@@ -1711,8 +1991,72 @@ export class Kirimi implements INodeType {
 					}
 				}
 
-				const responseData = await kirimiApiRequest.call(this, method, endpoint, body);
-				returnData.push(responseData);
+				if (resource === 'webhook') {
+						const scope = operation === 'unsubscribe' ? '' : (this.getNodeParameter('webhookScope', i) as string);
+						const scopeKey = scope === 'waba' ? 'waba_id' : 'device_id';
+						const scopeId = scope === 'waba'
+							? (this.getNodeParameter('webhookWabaId', i) as string)
+							: scope === 'device'
+								? (this.getNodeParameter('webhookDeviceId', i) as string)
+								: '';
+
+						if (operation === 'subscribe') {
+							endpoint = '/v1/webhook/subscribe';
+							const eventsParam = scope === 'waba' ? 'webhookWabaEvents' : 'webhookDeviceEvents';
+							const events = this.getNodeParameter(eventsParam, i) as string[];
+							if (events.length < 1 || events.length > MAX_SUBSCRIPTION_EVENTS) {
+								throw new NodeOperationError(
+									this.getNode(),
+									`Select between 1 and ${MAX_SUBSCRIPTION_EVENTS} events`,
+									{ itemIndex: i },
+								);
+							}
+							const allowed = scope === 'waba' ? WABA_EVENTS : DEVICE_EVENTS;
+							const unknownEvents = events.filter((event) => !allowed.includes(event));
+							if (unknownEvents.length > 0) {
+								throw new NodeOperationError(
+									this.getNode(),
+									`Unknown events for scope "${scope}": ${unknownEvents.join(', ')}`,
+									{ itemIndex: i },
+								);
+							}
+							const targetUrl = (this.getNodeParameter('targetUrl', i) as string).trim();
+							if (!/^https:\/\//i.test(targetUrl) || targetUrl.length > 500) {
+								throw new NodeOperationError(
+									this.getNode(),
+									'Target URL must be an https URL of at most 500 characters',
+									{ itemIndex: i },
+								);
+							}
+							body[scopeKey] = scopeId;
+							body.target_url = targetUrl;
+							body.events = events;
+							const label = this.getNodeParameter('webhookLabel', i) as string;
+							if (label) body.label = label;
+						} else if (operation === 'unsubscribe') {
+							endpoint = '/v1/webhook/unsubscribe';
+							body.id = this.getNodeParameter('subscriptionId', i);
+						} else if (operation === 'listEvents') {
+							endpoint = '/v1/webhook/events';
+							body[scopeKey] = scopeId;
+							const filterParam = scope === 'waba' ? 'webhookEventFilterWaba' : 'webhookEventFilterDevice';
+							const eventFilter = this.getNodeParameter(filterParam, i, []) as string[];
+							if (eventFilter.length > 0) body.events = eventFilter;
+							body.limit = this.getNodeParameter('webhookEventsLimit', i) as number;
+						}
+
+						const webhookResponse = await kirimiApiRequest.call(this, method, endpoint, body);
+						if (operation === 'listEvents') {
+							const listItems = ((webhookResponse?.data?.items ?? []) as IDataObject[]);
+							returnData.push(...listItems);
+						} else {
+							returnData.push(webhookResponse);
+						}
+						continue;
+					}
+
+					const responseData = await kirimiApiRequest.call(this, method, endpoint, body, {}, headers);
+					returnData.push(responseData);
 			} catch (error) {
 				if (this.continueOnFail()) {
 					returnData.push({ error: (error as Error).message });

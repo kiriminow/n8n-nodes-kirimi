@@ -11,7 +11,36 @@ Dalam n8n instance Anda:
 3. Masukkan: `n8n-nodes-kirimi`
 4. Klik **Install**
 
-## Cara Setup Webhook
+## Mode Registrasi
+
+Parameter **Registration** punya dua mode:
+
+| Mode | Cara kerja | Retry |
+|---|---|---|
+| **Manual (default)** | Salin URL webhook n8n ke dashboard Kirimi sendiri | Server retry sampai 7x selama sekitar 5 jam |
+| **Automatic (Recommended)** | Node mendaftar lewat API Kirimi saat workflow diaktifkan dan menghapusnya saat dinonaktifkan | Server retry sampai 7x selama sekitar 5 jam (event id sama, otomatis di-dedupe node) |
+
+Workflow lama otomatis memakai mode Manual (perilaku tidak berubah).
+
+### Mode Automatic
+
+1. Pilih **Registration = Automatic**, pilih kredensial Kirimi API.
+2. Pilih **Scope** (`Device (QR)` atau `WABA`), isi Device ID / WABA ID, pilih 1-20 events.
+3. Aktifkan workflow. Node memanggil `/v1/webhook/subscribe` dengan URL webhook n8n dan menyimpan `secret`.
+4. URL webhook **wajib https**. Jika n8n Anda memakai http, gunakan mode Manual atau set `WEBHOOK_URL` ke https.
+5. Mengubah URL, scope, atau events akan mengganti subscription secara otomatis saat workflow diaktifkan ulang.
+6. **Pindah dari Manual ke Automatic?** Hapus URL webhook node ini dari dashboard Kirimi. URL produksinya tetap sama, jadi kiriman dashboard (tanpa signature subscription) akan ditolak 401 lalu di-retry dan memicu email "webhook gagal".
+
+Verifikasi signature (otomatis di node, request tidak valid dijawab 401):
+
+- Header `x-kirimi-signature: sha256=<hex>` dan `x-kirimi-timestamp: <unix detik>`
+- `hex(HMAC-SHA256(key = secret, message = "<timestamp>.<raw body>"))`
+- Timestamp lebih dari 300 detik dari waktu sekarang ditolak
+
+Di kedua mode, event duplikat (id yang sama, 200 id terakhir) diabaikan. Penyimpanan id hanya bertahan
+untuk workflow yang aktif (production).
+
+## Cara Setup Webhook (Mode Manual)
 
 ### 1. Tambahkan Kirimi Trigger Node ke Workflow
 
@@ -24,25 +53,29 @@ Dalam n8n instance Anda:
 
 Di node configuration, pilih event-event yang ingin Anda tangkap:
 
-#### Event Tersedia:
+#### Event Device (23):
 
-- **Message (Incoming)** - Pesan masuk dari WhatsApp
-- **Message Sent** - Pesan berhasil terkirim
-- **Message Failed** - Pesan gagal terkirim
-- **Message ACK** - Status pesan berubah (delivered, read, etc)
-- **Connection Connected** - Device terhubung ke WhatsApp
-- **Connection Disconnected** - Device terputus
-- **Logged Out** - Device logout
-- **QR Code** - QR code dibuat (untuk scan)
-- **Group Join** - Bergabung ke group baru
-- **Group Update** - Group diupdate
-- **Presence Update** - Status user berubah (typing, online, etc)
-- **Call Offer** - Ada panggilan masuk
+`message`, `message.outgoing`, `message.history`, `message.sent`, `message.failed`, `message.ack`,
+`message.reaction`, `message.deleted`, `message.edited`, `connection.connected`, `connection.disconnected`,
+`logged_out`, `qr`, `group.join`, `group.leave`, `group.update`, `presence.update`, `call.offer`,
+`device.created`, `device.connected`, `device.status_changed`, `device.last_active`, `device.reconnected`
+
+#### Event WABA (10):
+
+`message`, `message.sent`, `message.ack`, `message.failed`, `template.status_update`,
+`template.quality_update`, `account.review_update`, `account.alerts`, `account.banned`,
+`phone_number.quality_update`
+
+Catatan:
+- `message.ack` hanya dikirim untuk WABA, **tidak** dikirim untuk device QR.
+- `presence.update` belum dikirim oleh server (belum delivered).
+- Di mode Manual, daftar event adalah gabungan; event khusus WABA diberi label "(WABA)".
+- Maksimal 20 events per subscription (mode Automatic).
 
 ### 3. Konfigurasi Filter (Opsional)
 
 #### Device ID Filter
-Filter hanya untuk device tertentu. Kosongkan untuk semua device.
+Filter hanya untuk device tertentu. Kosongkan untuk semua device. Untuk event WABA, nilainya adalah `phone_number_id`.
 ```
 Contoh: D-2J3IG
 ```
@@ -85,10 +118,16 @@ Kosongkan untuk menerima semua tipe.
 
 ## Contoh Data Output
 
+Setiap payload memakai envelope dengan field `id` (event id unik), `created_at` (ISO-8601 dengan offset
+`+07:00`) dan `datetime_wib`. Node menambahkan `eventId` (sama dengan `id`) dan `receivedAt`.
+
 ### Pesan Masuk (Message Event)
 
 ```json
 {
+  "id": "8f14e45f-ceea-4d1a-9a1e-2f5c6b7d8e90",
+  "created_at": "2025-11-19T20:15:07.000+07:00",
+  "datetime_wib": "2025-11-19 20:15:07",
   "event": "message",
   "deviceId": "D-2J3IG",
   "msgId": "3EB03F895D0BA042B04A69",
@@ -99,6 +138,7 @@ Kosongkan untuk menerima semua tipe.
   "isFromMe": false,
   "messageType": "text",
   "mediaUrl": "",
+  "eventId": "8f14e45f-ceea-4d1a-9a1e-2f5c6b7d8e90",
   "receivedAt": "2025-11-19T13:15:07.123Z"
 }
 ```
@@ -231,7 +271,7 @@ Event yang **non-aktif** secara default (perlu diaktifkan manual):
 ## Support
 
 Untuk pertanyaan atau issue:
-- GitHub: [kiriminow/n8n-kirimi-nodes](https://github.com/kiriminow/n8n-kirimi-nodes)
+- GitHub: [kiriminow/n8n-nodes-kirimi](https://github.com/kiriminow/n8n-nodes-kirimi)
 - Email: support@kirimi.id
 - Dokumentasi Kirimi: [docs.kirimi.id](https://docs.kirimi.id)
 

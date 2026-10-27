@@ -1,7 +1,7 @@
 {
   "name": "n8n-nodes-kirimi",
-  "version": "1.3.0",
-  "description": "n8n community node for Kirimi WhatsApp Unofficial API",
+  "version": "1.4.0",
+  "description": "n8n community node for Kirimi WhatsApp API (QR devices and WABA Cloud API)",
   "keywords": [
     "n8n-community-node-package",
     "n8n",
@@ -11,7 +11,7 @@
     "messaging"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/kiriminow/n8n-kirimi-nodes",
+  "homepage": "https://github.com/kiriminow/n8n-nodes-kirimi",
   "author": {
     "name": "Kirimi Support",
     "email": "support@kirimi.id"
@@ -43,6 +43,7 @@
     ]
   },
   "devDependencies": {
+    "@types/node": "^20.19.43",
     "@typescript-eslint/parser": "^5.45.0",
     "eslint-plugin-n8n-nodes-base": "^1.11.0",
     "gulp": "^4.0.2",

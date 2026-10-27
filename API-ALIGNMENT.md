@@ -26,7 +26,7 @@ All ten SDKs implement this contract. This file is kept in sync across every SDK
 | `kirimi-ruby` | `bundle exec rake` | 56 pass |
 | `kirimi-flutter` | `dart test` | 44 pass |
 | `kirimi-wordpress` | `vendor/bin/phpunit` | 44 pass |
-| `n8n-nodes-kirimi` | `npm run build` + `node validate.js` | ok |
+| `n8n-nodes-kirimi` (1.4.0: idempotency, message-status, webhook subscriptions, trigger auto mode) | `npm run build` + `npm run lint` + `node validate.js` | ok |
 
 ## Alias policy
 
@@ -57,12 +57,24 @@ Fields with **no** alias (server rejects anything else):
 
 HTTP codes: `400` invalid params · `401` wrong secret · `402` insufficient balance (`/v2/otp/send` whatsapp) ·
 `403` feature not in package / subscription inactive · `404` not found · `429` rate limited · `500` server ·
-`502` number undeliverable · `503` provider outage.
+`502` number undeliverable · `503` provider outage · `504` `ENGINE_TIMEOUT`.
+
+Error codes arrive in `data.code` alongside `message`:
+
+| HTTP | `data.code` | Meaning |
+|---|---|---|
+| 409 | `IDEMPOTENCY_IN_PROGRESS` | Same idempotency key is still processing |
+| 409 | `DELIVERY_UNKNOWN` | A 5xx happened after the send started; call `/v1/message-status` before retrying |
+| 400 | `USE_WABA_ENDPOINT` | The target needs a `/v1/waba/*` endpoint |
+| 429 | `WA_SEND_BUSY` | Device is busy sending; retry later |
+| 504 | `ENGINE_TIMEOUT` | Engine did not answer in time |
+| 400 | `UNSUPPORTED_IMAGE_FORMAT` | Image format cannot be sent |
+| 404 | `ROUTE_NOT_FOUND` | Unknown route |
 
 WABA: success means Meta **accepted** (`delivery_status: "accepted"`), not delivered. Final state arrives via
 webhook as `message.sent` / `message.ack` / `message.failed`.
 
-## Endpoint catalogue (30 public)
+## Endpoint catalogue (34 public)
 
 ### Auth & Device
 
@@ -82,8 +94,46 @@ webhook as `message.sent` / `message.ack` / `message.failed`.
 |---|---|
 | `POST /v1/send-message` | `user_code`, `secret`, `device_id`, `receiver`, `message`, `media_url`, `fileName`, `enableTypingEffect`=true, `typingSpeedMs`=350 (100–800), `quotedMessageId` |
 | `POST /v1/send-message-fast` | same minus typing-effect params |
-| `POST /v1/send-message-file` (multipart, max 50 MB) | `user_code`, `secret`, `device_id`, `receiver`, `file`, `message`, `caption`, `fileName`, `quotedMessageId` |
-| `POST /v1/broadcast-message` | `user_code`, `secret`, `device_id`, `label` (req, max 100), `numbers` (array, req, max 1000), `message` (req), `delay`=30 (clamped 30–3600), `delayMin`, `delayMax`, `media_url`, `fileName`, `started_at` (ISO), `enableTypingEffect`, `typingSpeedMs` |
+| `POST /v1/send-message-file` (multipart, max 50 MB) | `user_code`, `secret`, `device_id`, `receiver`, `file`, `message`, `caption`, `fileName`, `quotedMessageId`, `clientMsgId` |
+| `POST /v1/message-status` | `user_code`, `secret`, `device_id` (req), `clientMsgId` (req) → `{ clientMsgId, state: processing\|sent\|failed\|unknown, message_id, created_at, sent_at, delivered_at, read_at, error_message }` |
+| `POST /v1/broadcast-message` | `user_code`, `secret`, `device_id`, `label` (req, max 100), `numbers` (array, req, max 1000 per call), `message` (optional when `media_url` is set; one of them required), `delay`=30 (clamped 30–3600), `delayMin`, `delayMax`, `media_url`, `started_at` (ISO) |
+
+Broadcast notes: numbers are de-duplicated; package cap is 500 (free) / 2000 (paid) recipients; max 10
+broadcasts per hour. `fileName`, `enableTypingEffect` and `typingSpeedMs` are ignored by the server for
+broadcasts (the n8n node no longer sends them).
+
+### Idempotency (`send-message`, `send-message-fast`, `send-message-file`)
+
+Send `Idempotency-Key: <key>` (or body `clientMsgId`; the **header wins** when both are present). Key is 1–128
+chars of `[A-Za-z0-9._:-]`, TTL 24 hours. For the multipart endpoint use the `clientMsgId` form field.
+
+- Same key while the first request is still running: `409 IDEMPOTENCY_IN_PROGRESS`.
+- After a 2xx the stored response is replayed with header `Idempotent-Replayed: true`; nothing is sent again.
+- A 4xx releases the key, so a corrected request can reuse it.
+- A 5xx becomes `409 DELIVERY_UNKNOWN`: the send may or may not have happened. Call `/v1/message-status`
+  with the same `clientMsgId` instead of blindly retrying.
+
+### Webhook subscriptions (public, body auth)
+
+| Method + Path | Params |
+|---|---|
+| `POST /v1/webhook/subscribe` | `user_code`, `secret`, `target_url` (https, max 500), exactly one of `device_id` / `waba_id`, `events` (1–20), `label` (max 100). Returns `{ id, device_id, waba_id, target_url, events, secret, created_at }`. `secret` is the HMAC key and is returned **once**. Idempotent on (user, scope, url): an existing subscription is returned with its OLD events. |
+| `POST /v1/webhook/unsubscribe` | `user_code`, `secret`, `id` (404 if unknown, 200 if already revoked) |
+| `POST /v1/webhook/events` | `user_code`, `secret`, exactly one of `device_id` / `waba_id`, `events` (optional filter), `limit`=20 (max 100) → `data.items[]`, newest first |
+
+Signing: each delivery carries `x-kirimi-signature: sha256=<hex>`, `x-kirimi-timestamp: <unix seconds>`,
+`x-kirimi-event` and `x-kirimi-event-id`. `hex(HMAC-SHA256(key = secret as UTF-8, message = "<timestamp>.<raw body>"))`.
+Reject timestamps older than 300 s. Subscription deliveries are **not** retried; the legacy per-device URL
+retries up to 7 times over about 5 hours. Envelope fields: `id`, `created_at` (ISO, `+07:00`), `datetime_wib`.
+
+Device events (23): `message`, `message.outgoing`, `message.history`, `message.sent`, `message.failed`,
+`message.ack`, `message.reaction`, `message.deleted`, `message.edited`, `connection.connected`,
+`connection.disconnected`, `logged_out`, `qr`, `group.join`, `group.leave`, `group.update`, `presence.update`,
+`call.offer`, `device.created`, `device.connected`, `device.status_changed`, `device.last_active`,
+`device.reconnected`. WABA events (10): `message`, `message.sent`, `message.ack`, `message.failed`,
+`template.status_update`, `template.quality_update`, `account.review_update`, `account.alerts`,
+`account.banned`, `phone_number.quality_update`. `message.ack` is WABA-only; `presence.update` is not
+delivered yet.
 
 ### WABA (Cloud API) — uses `waba_id`, never `device_id`
 
@@ -111,7 +161,7 @@ webhook as `message.sent` / `message.ack` / `message.failed`.
 | `device` | + `device_id` (req), `custom_message` (must contain `{{otp}}`, 10–500 chars) | 0 |
 | `waba_user` | + `waba_id` (req), `template_name` (req, AUTHENTICATION + APPROVED) | 0 (Meta bills own WABA) |
 
-`POST /v2/otp/verify` — `user_code`, `secret`, `phone`, `otp_code`
+`POST /v2/otp/verify` — `user_code`, `secret`, `phone`, `otp_code` (exactly 6 digits)
 
 ### OTP Reverse
 
@@ -158,7 +208,7 @@ Out of scope for SDKs.
 
 ## Per-SDK requirements
 
-Every SDK must expose all 30 public endpoints, send canonical field names, and keep its current return-shape
+Every SDK must expose all 34 public endpoints, send canonical field names, and keep its current return-shape
 contract (no breaking change). Guards below are hard requirements.
 
 - [ ] `sendMessage`/`sendMessageFast`/`sendMessageFile` send `receiver`
@@ -173,4 +223,6 @@ contract (no breaking change). Guards below are hard requirements.
 - [ ] Deposits: `createDeposit`, `depositStatus`, `cancelDeposit`, `listDeposits`
 - [ ] `listPackages`, `userInfo`
 - [ ] Errors expose HTTP status where the language allows
+- [ ] `messageStatus` + idempotency key (`Idempotency-Key` header / `clientMsgId`) on the three send endpoints
+- [ ] Webhook subscribe / unsubscribe / events
 - [ ] Tests cover the new surface

@@ -1,6 +1,6 @@
 # n8n-nodes-kirimi
 
-This is an n8n community node for integrating with the Kirimi WhatsApp Unofficial API.
+This is an n8n community node for integrating with the Kirimi WhatsApp API (QR devices and WABA Cloud API).
 
 ## Features
 
@@ -21,6 +21,15 @@ The Kirimi node provides comprehensive integration with Kirimi's WhatsApp API, i
 - Send messages in fast mode — no typing effect (`send-message-fast`)
 - Send file via multipart upload, max 50MB (`send-message-file`)
 - Broadcast messages to multiple recipients (`broadcast-message`) with label, delays and scheduling
+  - Max 1000 numbers per call (package cap: 500 free, 2000 paid), duplicates removed, max 10 broadcasts per hour
+  - `message` is optional when a Media URL is given; at least one of them is required
+  - File name and typing effect are ignored by the server for broadcasts and are no longer sent
+- **Idempotency**: Send Message, Send Message Fast and Send Message File accept an optional *Client Message ID*
+  (1-128 chars of `[A-Za-z0-9._:-]`). JSON operations send it as the `Idempotency-Key` header, the file
+  operation as the `clientMsgId` form field. Retrying with the same key within 24 hours never sends twice.
+- **Get Message Status** (`message-status`): look up a message by its Client Message ID. Returns
+  `clientMsgId`, `state` (`processing` | `sent` | `failed` | `unknown`), `message_id`, `created_at`,
+  `sent_at`, `delivered_at`, `read_at`, `error_message`. Use it after a `409 DELIVERY_UNKNOWN`.
 
 ### WABA (WhatsApp Business API)
 - Send template messages via Meta Cloud API (`waba/send-message`)
@@ -51,9 +60,19 @@ The Kirimi node provides comprehensive integration with Kirimi's WhatsApp API, i
 ### User Information
 - Get user account information (`user-info`)
 
-### Webhook Trigger (NEW!)
-- Receive webhook events from Kirimi
+### Webhook Subscriptions
+- **Subscribe** (`webhook/subscribe`): HTTPS target URL, scope (device or WABA), 1-20 events, optional label.
+  The response contains a signing `secret` that is returned **once** - store it.
+- **Unsubscribe** (`webhook/unsubscribe`) by subscription id
+- **List Events** (`webhook/events`): recent events for a device or WABA (limit 1-100, default 20),
+  one n8n item per event
+
+### Webhook Trigger
+- Two registration modes: **Automatic** (registers itself through the API, verifies the HMAC signature)
+  and **Manual** (paste the URL in the Kirimi dashboard, default)
+- Receive webhook events from Kirimi (23 device events, 10 WABA events)
 - Filter events by type (message, connection, QR, etc)
+- Duplicate deliveries are dropped (event id)
 - Filter messages by sender, type, and group status
 - Auto-process incoming WhatsApp messages
 - Real-time notifications for device status changes
@@ -90,8 +109,12 @@ The Kirimi node provides comprehensive integration with Kirimi's WhatsApp API, i
 1. Add the "Kirimi Trigger" node to your workflow
 2. Select the events you want to receive (e.g., "Message", "Connection Connected")
 3. Configure optional filters (device ID, message type, etc)
-4. Activate the workflow to get your webhook URL
-5. Copy the webhook URL and configure it in your [Kirimi Dashboard](https://dashboard.kirimi.id)
+4. Choose a registration mode:
+   - **Automatic (Recommended)**: pick scope (device or WABA), the device/WABA ID and the events, and select
+     Kirimi API credentials. Activating the workflow registers the webhook; deactivating removes it.
+     Requires an https n8n URL. Failed deliveries are retried up to 7 times over about 5 hours with the same event id.
+   - **Manual (default)**: activate the workflow, copy the webhook URL and configure it in your
+     [Kirimi Dashboard](https://dashboard.kirimi.id). The server retries up to 7 times over about 5 hours.
 
 For detailed webhook trigger usage, see [KIRIMI_TRIGGER_README.md](./KIRIMI_TRIGGER_README.md)
 
@@ -101,7 +124,7 @@ For detailed API documentation, visit: https://kirimi.id/docs
 
 ## Support
 
-For issues and feature requests, please visit: https://github.com/kiriminow/n8n-kirimi-nodes/issues
+For issues and feature requests, please visit: https://github.com/kiriminow/n8n-nodes-kirimi/issues
 
 ## License
 
