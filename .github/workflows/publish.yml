@@ -65,10 +65,11 @@ jobs:
         run: npm test
 
       - name: Publish with provenance
-        # With trusted publishing, npm exchanges the OIDC token itself and ignores NODE_AUTH_TOKEN.
-        # NPM_TOKEN is only used when it is set and no trusted publisher exists.
+        # Same as the n8n-nodes-starter: `n8n-node release` publishes with provenance in CI
+        # (a plain `npm publish` is blocked by the prepublishOnly `n8n-node prerelease` guard).
+        # With trusted publishing, npm exchanges the OIDC token itself; NPM_TOKEN is the fallback.
         run: |
           [ -n "$NPM_TOKEN" ] && npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
-          npm publish --provenance --access public
+          npm run release
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
