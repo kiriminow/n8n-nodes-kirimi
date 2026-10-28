@@ -1,95 +1,124 @@
+// Structure checks run in CI after `npm run build`. Exits non-zero on any failure.
 const fs = require('fs');
 const path = require('path');
 
-console.log('🔍 Validating n8n-nodes-kirimi structure...\n');
+const root = __dirname;
+const failures = [];
+const ok = (message) => console.log(`ok    ${message}`);
+const fail = (message) => {
+	failures.push(message);
+	console.log(`FAIL  ${message}`);
+};
+const check = (condition, message) => (condition ? ok(message) : fail(message));
+const exists = (file) => fs.existsSync(path.join(root, file));
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
-// Check required files
-const requiredFiles = [
+console.log('Validating n8n-nodes-kirimi...\n');
+
+// ── Source layout ───────────────────────────────────────────────────────────
+console.log('Required files');
+[
 	'package.json',
+	'package-lock.json',
 	'tsconfig.json',
+	'eslint.config.mjs',
+	'.prettierrc.js',
+	'LICENSE.md',
+	'README.md',
+	'CHANGELOG.md',
+	'.github/workflows/publish.yml',
 	'credentials/KirimiApi.credentials.ts',
+	'icons/kirimi.svg',
+	'icons/kirimi.dark.svg',
 	'nodes/Kirimi/Kirimi.node.ts',
 	'nodes/Kirimi/GenericFunctions.ts',
 	'nodes/Kirimi/events.ts',
 	'nodes/KirimiTrigger/KirimiTrigger.node.ts',
-	'icons/kirimi.svg',
-	'README.md'
-];
+	'nodes/KirimiTrigger/verify.ts',
+	'nodes/KirimiPollTrigger/KirimiPollTrigger.node.ts',
+].forEach((file) => check(exists(file), file));
 
-let allValid = true;
+// ── package.json ────────────────────────────────────────────────────────────
+console.log('\npackage.json');
+const pkg = JSON.parse(read('package.json'));
+check(pkg.name === 'n8n-nodes-kirimi', 'name is n8n-nodes-kirimi');
+check(pkg.license === 'MIT', 'license is MIT');
+check(
+	(pkg.keywords || []).includes('n8n-community-node-package'),
+	'keyword n8n-community-node-package',
+);
+check(
+	pkg.repository && pkg.repository.url === 'https://github.com/kiriminow/n8n-nodes-kirimi.git',
+	'repository url',
+);
+check(pkg.author && pkg.author.name && pkg.author.email, 'author name and email');
+check(!pkg.dependencies || Object.keys(pkg.dependencies).length === 0, 'zero runtime dependencies');
+check(
+	pkg.peerDependencies && pkg.peerDependencies['n8n-workflow'],
+	'n8n-workflow is a peer dependency',
+);
+check(
+	pkg.devDependencies && pkg.devDependencies['@n8n/node-cli'],
+	'@n8n/node-cli is a devDependency',
+);
+['build', 'dev', 'lint', 'lint:fix', 'release', 'test'].forEach((script) =>
+	check(pkg.scripts && pkg.scripts[script], `script "${script}"`),
+);
+check(pkg.scripts && pkg.scripts.build === 'n8n-node build', 'build uses n8n-node build');
+check(pkg.n8n && pkg.n8n.n8nNodesApiVersion === 1, 'n8n.n8nNodesApiVersion is 1');
+check(pkg.n8n && pkg.n8n.strict === true, 'n8n.strict is true');
 
-requiredFiles.forEach(file => {
-	const filePath = path.join(__dirname, file);
-	if (fs.existsSync(filePath)) {
-		console.log(`✅ ${file}`);
-	} else {
-		console.log(`❌ Missing: ${file}`);
-		allValid = false;
-	}
+// ── n8n entries point at built files that have a source ─────────────────────
+console.log('\nCredentials and nodes');
+const entries = [...((pkg.n8n && pkg.n8n.credentials) || []), ...((pkg.n8n && pkg.n8n.nodes) || [])];
+check(
+	(pkg.n8n.credentials || []).length > 0 && (pkg.n8n.nodes || []).length > 0,
+	'credentials and nodes are declared',
+);
+entries.forEach((entry) => {
+	const source = entry.replace(/^dist\//, '').replace(/\.js$/, '.ts');
+	check(exists(source), `source for ${entry}`);
+	check(exists(entry), `built file ${entry} (run npm run build first)`);
 });
 
-// Check node source for key features
-console.log('\n🧩 Checking node features...');
-try {
-	const nodeSource = fs.readFileSync(path.join(__dirname, 'nodes/Kirimi/Kirimi.node.ts'), 'utf8');
-	const features = [
+// ── Node features that other tooling and docs rely on ───────────────────────
+console.log('\nNode features');
+if (exists('nodes/Kirimi/Kirimi.node.ts')) {
+	const source = read('nodes/Kirimi/Kirimi.node.ts');
+	[
 		["resource 'webhook'", "value: 'webhook'"],
 		["operation 'messageStatus'", "value: 'messageStatus'"],
 		["operation 'subscribe'", "value: 'subscribe'"],
 		["operation 'unsubscribe'", "value: 'unsubscribe'"],
 		["operation 'listEvents'", "value: 'listEvents'"],
-	];
-	features.forEach(([label, needle]) => {
-		if (nodeSource.includes(needle)) {
-			console.log(`✅ ${label}`);
-		} else {
-			console.log(`❌ Missing ${label}`);
-			allValid = false;
-		}
-	});
-} catch (error) {
-	console.log('❌ Error reading Kirimi.node.ts:', error.message);
-	allValid = false;
+		['usableAsTool', 'usableAsTool: true'],
+		['node versions [1, 2]', 'version: [1, LOCATOR_VERSION]'],
+		['auto client message id', "name: 'autoClientMsgId'"],
+	].forEach(([label, needle]) => check(source.includes(needle), label));
+}
+if (exists('nodes/KirimiPollTrigger/KirimiPollTrigger.node.ts')) {
+	const source = read('nodes/KirimiPollTrigger/KirimiPollTrigger.node.ts');
+	check(source.includes('polling: true'), 'polling trigger declares polling: true');
 }
 
-// Check package.json structure
-console.log('\n📦 Checking package.json...');
-try {
-	const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-	
-	if (packageJson.n8n) {
-		console.log('✅ n8n configuration found');
-		if (packageJson.n8n.credentials && packageJson.n8n.credentials.length > 0) {
-			console.log('✅ Credentials defined');
-		} else {
-			console.log('❌ No credentials defined');
-			allValid = false;
-		}
-		if (packageJson.n8n.nodes && packageJson.n8n.nodes.length > 0) {
-			console.log('✅ Nodes defined');
-		} else {
-			console.log('❌ No nodes defined');
-			allValid = false;
-		}
-	} else {
-		console.log('❌ No n8n configuration found');
-		allValid = false;
-	}
-} catch (error) {
-	console.log('❌ Error reading package.json:', error.message);
-	allValid = false;
+// ── Icons referenced by nodes exist next to them ────────────────────────────
+console.log('\nIcons');
+['nodes/Kirimi', 'nodes/KirimiTrigger', 'nodes/KirimiPollTrigger'].forEach((dir) => {
+	check(exists(`${dir}/kirimi.svg`), `${dir}/kirimi.svg`);
+	check(exists(`${dir}/kirimi.dark.svg`), `${dir}/kirimi.dark.svg`);
+});
+
+// ── Docs are English and versioned ──────────────────────────────────────────
+console.log('\nDocs');
+if (exists('CHANGELOG.md')) {
+	check(read('CHANGELOG.md').includes(`## ${pkg.version}`), `CHANGELOG has an entry for ${pkg.version}`);
 }
 
-console.log('\n📋 Summary:');
-if (allValid) {
-	console.log('🎉 All validations passed! The n8n community node structure is correct.');
-	console.log('\n📝 Next steps:');
-	console.log('1. Run: npm install');
-	console.log('2. Run: npm run build');
-	console.log('3. Test the node in your n8n instance');
-	console.log('4. Publish to npm: npm publish');
+console.log('\nSummary');
+if (failures.length === 0) {
+	console.log('All validations passed.');
 } else {
-	console.log('⚠️  Some validations failed. Please fix the issues above.');
+	console.log(`${failures.length} validation(s) failed:`);
+	failures.forEach((message) => console.log(`  - ${message}`));
+	process.exit(1);
 }
-
-console.log('\n🔗 Documentation: https://docs.n8n.io/integrations/creating-nodes/');

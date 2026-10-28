@@ -43,7 +43,7 @@ export const WABA_EVENTS: string[] = [
 export const MAX_SUBSCRIPTION_EVENTS = 20;
 
 const DEVICE_LABELS: Record<string, string> = {
-	'message': 'Message (Incoming)',
+	message: 'Message (Incoming)',
 	'message.outgoing': 'Message Outgoing',
 	'message.history': 'Message History',
 	'message.sent': 'Message Sent',
@@ -54,8 +54,8 @@ const DEVICE_LABELS: Record<string, string> = {
 	'message.edited': 'Message Edited',
 	'connection.connected': 'Connection Connected',
 	'connection.disconnected': 'Connection Disconnected',
-	'logged_out': 'Logged Out',
-	'qr': 'QR Code',
+	logged_out: 'Logged Out',
+	qr: 'QR Code',
 	'group.join': 'Group Join',
 	'group.leave': 'Group Leave',
 	'group.update': 'Group Update',
@@ -69,7 +69,7 @@ const DEVICE_LABELS: Record<string, string> = {
 };
 
 const WABA_LABELS: Record<string, string> = {
-	'message': 'Message (Incoming)',
+	message: 'Message (Incoming)',
 	'message.sent': 'Message Sent',
 	'message.ack': 'Message Ack',
 	'message.failed': 'Message Failed',
@@ -85,7 +85,8 @@ const WABA_LABELS: Record<string, string> = {
 const toOptions = (events: string[], labels: Record<string, string>): INodePropertyOptions[] =>
 	events.map((value) => ({ name: labels[value] ?? value, value }));
 
-export const deviceEventOptions = (): INodePropertyOptions[] => toOptions(DEVICE_EVENTS, DEVICE_LABELS);
+export const deviceEventOptions = (): INodePropertyOptions[] =>
+	toOptions(DEVICE_EVENTS, DEVICE_LABELS);
 
 export const wabaEventOptions = (): INodePropertyOptions[] => toOptions(WABA_EVENTS, WABA_LABELS);
 

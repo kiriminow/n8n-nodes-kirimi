@@ -26,7 +26,7 @@ All ten SDKs implement this contract. This file is kept in sync across every SDK
 | `kirimi-ruby` | `bundle exec rake` | 56 pass |
 | `kirimi-flutter` | `dart test` | 44 pass |
 | `kirimi-wordpress` | `vendor/bin/phpunit` | 44 pass |
-| `n8n-nodes-kirimi` (1.4.0: idempotency, message-status, webhook subscriptions, trigger auto mode) | `npm run build` + `npm run lint` + `node validate.js` | ok |
+| `n8n-nodes-kirimi` (1.5.0: official `@n8n/node-cli` toolchain, resource-locator pickers via `/v1/list-devices` and `/v1/waba/accounts`, credential-based auth, auto client message id, polling trigger on `delivery: "poll"`) | `npm run lint` + `npm run build` + `node validate.js` + `npm test` | 54 pass |
 
 ## Alias policy
 

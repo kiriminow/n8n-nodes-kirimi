@@ -1,13 +1,17 @@
-import { 
-	IAuthenticateGeneric, 
-	ICredentialTestRequest, 
-	ICredentialType, 
-	INodeProperties 
+import type {
+	IAuthenticateGeneric,
+	Icon,
+	ICredentialTestRequest,
+	ICredentialType,
+	INodeProperties,
 } from 'n8n-workflow';
 
 export class KirimiApi implements ICredentialType {
 	name = 'kirimiApi';
 	displayName = 'Kirimi API';
+
+	icon: Icon = { light: 'file:../icons/kirimi.svg', dark: 'file:../icons/kirimi.dark.svg' };
+
 	documentationUrl = 'https://kirimi.id/docs';
 	properties: INodeProperties[] = [
 		{
@@ -33,7 +37,7 @@ export class KirimiApi implements ICredentialType {
 			type: 'string',
 			required: true,
 			default: 'https://api.kirimi.id',
-			placeholder: 'https://api.kirimi.ID',
+			placeholder: 'https://api.kirimi.id',
 			description: 'The base URL for the Kirimi API (without version prefix)',
 		},
 	];

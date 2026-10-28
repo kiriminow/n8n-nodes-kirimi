@@ -1,14 +1,18 @@
 import {
-	IDataObject,
-	IExecuteFunctions,
-	IHttpRequestMethods,
-	INodeExecutionData,
-	INodeType,
-	INodeTypeDescription,
+	NodeConnectionTypes,
 	NodeOperationError,
+	type IDataObject,
+	type IExecuteFunctions,
+	type IHttpRequestMethods,
+	type ILoadOptionsFunctions,
+	type INodeExecutionData,
+	type INodeListSearchResult,
+	type INodeType,
+	type INodeTypeDescription,
 } from 'n8n-workflow';
 
-import { kirimiApiRequest, wrapKirimiError } from './GenericFunctions';
+import { asNodeError, kirimiApiRequest, kirimiMultipartRequest } from './GenericFunctions';
+import { buildAutoClientMsgId, isValidClientMsgId } from './clientMsgId';
 import {
 	DEVICE_EVENTS,
 	MAX_SUBSCRIPTION_EVENTS,
@@ -16,20 +20,52 @@ import {
 	deviceEventOptions,
 	wabaEventOptions,
 } from './events';
+import { searchDevices, searchWabaAccounts } from './listSearch';
+import { LOCATOR_VERSION, readIdParameter, withResourceLocators } from './locators';
+import { buildMultipartBody } from './multipart';
 
-const CLIENT_MSG_ID_REGEX = /^[A-Za-z0-9._:-]{1,128}$/;
+interface ResolvedClientMsgId {
+	value: string;
+	auto: boolean;
+}
 
-function getClientMsgId(ctx: IExecuteFunctions, i: number): string {
+/**
+ * The Client Message ID to send as idempotency key. A value typed by the user always wins; when it is
+ * empty and "Auto-Generate Client Message ID" is on, a stable key is derived from the execution.
+ */
+function resolveClientMsgId(ctx: IExecuteFunctions, i: number): ResolvedClientMsgId {
 	const value = (ctx.getNodeParameter('clientMsgId', i, '') as string).trim();
-	if (!value) return '';
-	if (!CLIENT_MSG_ID_REGEX.test(value)) {
-		throw new NodeOperationError(
-			ctx.getNode(),
-			'Client Message ID must be 1-128 characters of letters, digits, ".", "_", ":" or "-"',
-			{ itemIndex: i },
-		);
+	if (value) {
+		if (!isValidClientMsgId(value)) {
+			throw new NodeOperationError(
+				ctx.getNode(),
+				'Client Message ID must be 1-128 characters of letters, digits, ".", "_", ":" or "-"',
+				{ itemIndex: i },
+			);
+		}
+		return { value, auto: false };
 	}
-	return value;
+	if (ctx.getNodeParameter('autoClientMsgId', i, false) as boolean) {
+		return {
+			value: buildAutoClientMsgId({
+				executionId: ctx.getExecutionId(),
+				nodeName: ctx.getNode().name,
+				itemIndex: i,
+				runIndex: ctx.getExecuteData().runIndex,
+			}),
+			auto: true,
+		};
+	}
+	return { value: '', auto: false };
+}
+
+/** Surface an auto-generated Client Message ID in the output so it can be used with Get Message Status. */
+function withClientMsgId(response: unknown, clientMsg: ResolvedClientMsgId): IDataObject {
+	if (!clientMsg.auto || !response || typeof response !== 'object' || Array.isArray(response)) {
+		return response as IDataObject;
+	}
+	const data = response as IDataObject;
+	return data.clientMsgId === undefined ? { ...data, clientMsgId: clientMsg.value } : data;
 }
 
 function splitList(value: unknown): string[] {
@@ -56,23 +92,26 @@ export class Kirimi implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Kirimi',
 		name: 'kirimi',
-		icon: 'file:kirimi.svg',
-		group: ['communication'],
-		version: 1,
+		icon: { light: 'file:kirimi.svg', dark: 'file:kirimi.dark.svg' },
+		group: ['output'],
+		version: [1, LOCATOR_VERSION],
+		defaultVersion: LOCATOR_VERSION,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
-		description: 'Interact with the Kirimi WhatsApp API (QR devices, WABA, OTP, Devices, Deposits, Webhooks)',
+		description:
+			'Interact with the Kirimi WhatsApp API (QR devices, WABA, OTP, Devices, Deposits, Webhooks)',
 		defaults: {
 			name: 'Kirimi',
 		},
-		inputs: ['main'] as any,
-		outputs: ['main'] as any,
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main],
+		usableAsTool: true,
 		credentials: [
 			{
 				name: 'kirimiApi',
 				required: true,
 			},
 		],
-		properties: [
+		properties: withResourceLocators([
 			{
 				displayName: 'Resource',
 				name: 'resource',
@@ -515,7 +554,13 @@ export class Kirimi implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendMessage', 'sendMessageFast', 'sendMessageFile', 'broadcastMessage', 'messageStatus'],
+						operation: [
+							'sendMessage',
+							'sendMessageFast',
+							'sendMessageFile',
+							'broadcastMessage',
+							'messageStatus',
+						],
 					},
 				},
 				default: '',
@@ -748,8 +793,10 @@ export class Kirimi implements INodeType {
 						otpMethod: ['device'],
 					},
 				},
-				default: '🔐 Kode OTP {{app_name}}\n\nKode verifikasi Anda: {{otp}}\n\nBerlaku 5 menit. Jangan bagikan!',
-				description: 'Custom message template. Must contain {{otp}} placeholder. Optionally use {{app_name}}.',
+				default:
+					'🔐 Kode OTP {{app_name}}\n\nKode verifikasi Anda: {{otp}}\n\nBerlaku 5 menit. Jangan bagikan!',
+				description:
+					'Custom message template. Must contain {{otp}} placeholder. Optionally use {{app_name}}.',
 				placeholder: '🔐 Kode OTP {{app_name}}\n\nKode verifikasi: {{otp}}\n\nBerlaku 5 menit.',
 			},
 			{
@@ -932,7 +979,8 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'URL for media (image, video, document). For broadcasts, the message becomes optional when a media URL is given.',
+				description:
+					'URL for media (image, video, document). For broadcasts, the message becomes optional when a media URL is given.',
 			},
 			{
 				displayName: 'File Name',
@@ -998,7 +1046,22 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'Idempotency key, 1-128 characters of [A-Za-z0-9._:-]. Retries with the same key within 24 hours never send the message twice. Use it with Get Message Status.',
+				description:
+					'Idempotency key, 1-128 characters of [A-Za-z0-9._:-]. Retries with the same key within 24 hours never send the message twice. Use it with Get Message Status.',
+			},
+			{
+				displayName: 'Auto-Generate Client Message ID',
+				name: 'autoClientMsgId',
+				type: 'boolean',
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['sendMessage', 'sendMessageFast', 'sendMessageFile'],
+					},
+				},
+				default: false,
+				description:
+					'Whether to derive a stable Client Message ID from the execution ID, the node name and the item index when none is given. A retried execution of the same item then reuses the same key, so the message is never sent twice. The key used is added to the output as clientMsgId.',
 			},
 			{
 				displayName: 'Client Message ID',
@@ -1084,7 +1147,8 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '',
-				description: 'Recipient numbers separated by comma or newline. Max 1000 numbers per call (package cap: 500 free, 2000 paid). Duplicates are removed.',
+				description:
+					'Recipient numbers separated by comma or newline. Max 1000 numbers per call (package cap: 500 free, 2000 paid). Duplicates are removed.',
 				placeholder: '628111,628222,628333',
 			},
 			{
@@ -1111,7 +1175,8 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: 30,
-				description: 'Delay between messages in seconds (clamped to 30-3600). Max 10 broadcasts per hour.',
+				description:
+					'Delay between messages in seconds (clamped to 30-3600). Max 10 broadcasts per hour.',
 			},
 			{
 				displayName: 'Delay Min (Seconds)',
@@ -1215,7 +1280,8 @@ export class Kirimi implements INodeType {
 				},
 				default: '',
 				placeholder: 'https://example.com/webhook',
-				description: 'HTTPS URL that receives the events (max 500 chars). The response includes a signing secret that is returned only once, so store it.',
+				description:
+					'HTTPS URL that receives the events (max 500 chars). The response includes a signing secret that is returned only once, so store it.',
 			},
 			{
 				displayName: 'Events',
@@ -1362,7 +1428,8 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '[]',
-				description: 'JSON array of contacts to save, e.g. [{"nama":"Budi","nomor":"628123"}] (max 1000)',
+				description:
+					'JSON array of contacts to save, e.g. [{"nama":"Budi","nomor":"628123"}] (max 1000)',
 			},
 			{
 				displayName: 'Device ID',
@@ -1540,13 +1607,7 @@ export class Kirimi implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['waba'],
-						operation: [
-							'sendWabaMessage',
-							'replyMessage',
-							'syncTemplates',
-							'sendOtp',
-							'verifyOtp',
-						],
+						operation: ['sendWabaMessage', 'replyMessage', 'syncTemplates', 'sendOtp', 'verifyOtp'],
 					},
 				},
 				default: '',
@@ -1605,7 +1666,8 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '{}',
-				description: 'Template header object, e.g. {"type":"document","link":"https://...","filename":"invoice.pdf"}',
+				description:
+					'Template header object, e.g. {"type":"document","link":"https://...","filename":"invoice.pdf"}',
 			},
 			{
 				displayName: 'Buttons',
@@ -1632,7 +1694,8 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default: '{"type":"text","text":""}',
-				description: 'Message object. Examples: {"type":"text","text":"Hi"} · {"type":"image","media_url":"https://...","caption":"Hi"} · {"type":"interactive","interactive":{...}}.',
+				description:
+					'Message object. Examples: {"type":"text","text":"Hi"} · {"type":"image","media_url":"https://...","caption":"Hi"} · {"type":"interactive","interactive":{...}}.',
 			},
 			{
 				displayName: 'Limit',
@@ -1674,7 +1737,25 @@ export class Kirimi implements INodeType {
 				default: '',
 				description: 'The OTP code to verify (4-8 digits)',
 			},
-		],
+		]),
+	};
+
+	methods = {
+		listSearch: {
+			async searchDevices(
+				this: ILoadOptionsFunctions,
+				filter?: string,
+				paginationToken?: string,
+			): Promise<INodeListSearchResult> {
+				return await searchDevices.call(this, filter, paginationToken);
+			},
+			async searchWabaAccounts(
+				this: ILoadOptionsFunctions,
+				filter?: string,
+			): Promise<INodeListSearchResult> {
+				return await searchWabaAccounts.call(this, filter);
+			},
+		},
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
@@ -1685,20 +1766,16 @@ export class Kirimi implements INodeType {
 
 		for (let i = 0; i < items.length; i++) {
 			const body: IDataObject = {};
-				const headers: IDataObject = {};
-				let endpoint = '';
+			const headers: IDataObject = {};
+			let endpoint = '';
 			const method: IHttpRequestMethods = 'POST';
-
-			// Add authentication to all requests
-			const credentials = await this.getCredentials('kirimiApi');
-			body.user_code = credentials.userCode;
-			body.secret = credentials.secret;
+			let clientMsg: ResolvedClientMsgId = { value: '', auto: false };
 
 			try {
 				if (resource === 'otp') {
 					if (operation === 'generateOtp') {
 						endpoint = '/v1/generate-otp';
-						body.device_id = this.getNodeParameter('deviceId', i);
+						body.device_id = readIdParameter(this, 'deviceId', i);
 						body.phone = this.getNodeParameter('phone', i);
 						const otpLength = this.getNodeParameter('otpLength', i) as number;
 						if (otpLength) body.otp_length = otpLength;
@@ -1715,7 +1792,7 @@ export class Kirimi implements INodeType {
 						}
 					} else if (operation === 'validateOtp') {
 						endpoint = '/v1/validate-otp';
-						body.device_id = this.getNodeParameter('deviceId', i);
+						body.device_id = readIdParameter(this, 'deviceId', i);
 						body.phone = this.getNodeParameter('phone', i);
 						body.otp = this.getNodeParameter('otp', i);
 					} else if (operation === 'sendOtpV2') {
@@ -1727,11 +1804,11 @@ export class Kirimi implements INodeType {
 						if (appName) body.app_name = appName;
 
 						if (otpMethod === 'device') {
-							body.device_id = this.getNodeParameter('deviceIdV2', i);
+							body.device_id = readIdParameter(this, 'deviceIdV2', i);
 							const customMessage = this.getNodeParameter('customMessageV2', i) as string;
 							if (customMessage) body.custom_message = customMessage;
 						} else if (otpMethod === 'waba_user') {
-							body.waba_id = this.getNodeParameter('otpWabaId', i);
+							body.waba_id = readIdParameter(this, 'otpWabaId', i);
 							body.template_name = this.getNodeParameter('otpTemplateName', i);
 						}
 					} else if (operation === 'verifyOtpV2') {
@@ -1741,7 +1818,7 @@ export class Kirimi implements INodeType {
 					} else if (operation === 'otpReverseCreate') {
 						endpoint = '/v2/otp-reverse/create';
 						body.phone = this.getNodeParameter('reversePhone', i);
-						body.device_id = this.getNodeParameter('deviceId', i);
+						body.device_id = readIdParameter(this, 'deviceId', i);
 						const appName = this.getNodeParameter('reverseAppName', i) as string;
 						if (appName) body.app_name = appName;
 						const callbackUrl = this.getNodeParameter('callbackUrl', i) as string;
@@ -1759,7 +1836,7 @@ export class Kirimi implements INodeType {
 				} else if (resource === 'message') {
 					if (operation === 'sendMessage') {
 						endpoint = '/v1/send-message';
-						body.device_id = this.getNodeParameter('deviceId', i);
+						body.device_id = readIdParameter(this, 'deviceId', i);
 						body.receiver = this.getNodeParameter('receiver', i);
 						const message = this.getNodeParameter('message', i) as string;
 						if (message) body.message = message;
@@ -1771,14 +1848,14 @@ export class Kirimi implements INodeType {
 						if (quotedMessageId) body.quotedMessageId = quotedMessageId;
 						const enableTypingEffect = this.getNodeParameter('enableTypingEffect', i) as boolean;
 						if (enableTypingEffect) {
-								body.enableTypingEffect = enableTypingEffect;
-								body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i) as number;
-							}
-							const clientMsgId = getClientMsgId(this, i);
-							if (clientMsgId) headers['Idempotency-Key'] = clientMsgId;
-						} else if (operation === 'sendMessageFast') {
+							body.enableTypingEffect = enableTypingEffect;
+							body.typingSpeedMs = this.getNodeParameter('typingSpeedMs', i) as number;
+						}
+						clientMsg = resolveClientMsgId(this, i);
+						if (clientMsg.value) headers['Idempotency-Key'] = clientMsg.value;
+					} else if (operation === 'sendMessageFast') {
 						endpoint = '/v1/send-message-fast';
-						body.device_id = this.getNodeParameter('deviceId', i);
+						body.device_id = readIdParameter(this, 'deviceId', i);
 						body.receiver = this.getNodeParameter('receiver', i);
 						const message = this.getNodeParameter('message', i) as string;
 						if (message) body.message = message;
@@ -1788,9 +1865,9 @@ export class Kirimi implements INodeType {
 						if (fileName) body.fileName = fileName;
 						const quotedMessageId = this.getNodeParameter('quotedMessageId', i) as string;
 						if (quotedMessageId) body.quotedMessageId = quotedMessageId;
-							const clientMsgId = getClientMsgId(this, i);
-							if (clientMsgId) headers['Idempotency-Key'] = clientMsgId;
-						} else if (operation === 'sendMessageFile') {
+						clientMsg = resolveClientMsgId(this, i);
+						if (clientMsg.value) headers['Idempotency-Key'] = clientMsg.value;
+					} else if (operation === 'sendMessageFile') {
 						endpoint = '/v1/send-message-file';
 						const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
 						const item = items[i];
@@ -1810,70 +1887,59 @@ export class Kirimi implements INodeType {
 						const messageFile = this.getNodeParameter('messageFile', i) as string;
 						const quotedMessageId = this.getNodeParameter('quotedMessageId', i) as string;
 
-						const formData: IDataObject = {
-							user_code: credentials.userCode as string,
-							secret: credentials.secret as string,
-							device_id: this.getNodeParameter('deviceId', i) as string,
-							receiver: this.getNodeParameter('receiver', i) as string,
-							file: {
-								value: fileBuffer,
-								options: {
-									filename: resolvedFileName,
-									contentType: binaryData.mimeType,
-								},
+						clientMsg = resolveClientMsgId(this, i);
+						const credentials = await this.getCredentials('kirimiApi');
+						const multipart = await buildMultipartBody(
+							{
+								user_code: credentials.userCode as string,
+								secret: credentials.secret as string,
+								device_id: readIdParameter(this, 'deviceId', i),
+								receiver: this.getNodeParameter('receiver', i) as string,
+								message: messageFile,
+								caption: messageFile,
+								fileName: resolvedFileName,
+								quotedMessageId,
+								clientMsgId: clientMsg.value,
 							},
-						};
-						if (messageFile) {
-							formData.message = messageFile;
-							formData.caption = messageFile;
-						}
-						if (resolvedFileName) formData.fileName = resolvedFileName;
-						if (quotedMessageId) formData.quotedMessageId = quotedMessageId;
-							const clientMsgId = getClientMsgId(this, i);
-							if (clientMsgId) formData.clientMsgId = clientMsgId;
-
-							let responseData: unknown;
-							try {
-								responseData = await this.helpers.request({
-									method: 'POST',
-									url: `${credentials.baseUrl}${endpoint}`,
-									formData,
-									json: true,
-								});
-							} catch (requestError) {
-								throw wrapKirimiError(this.getNode(), requestError);
-							}
-							returnData.push(responseData as IDataObject);
-							continue;
+							{ buffer: fileBuffer, fileName: resolvedFileName, mimeType: binaryData.mimeType },
+						);
+						const fileResponse = await kirimiMultipartRequest.call(
+							this,
+							endpoint,
+							multipart.body,
+							multipart.contentType,
+						);
+						returnData.push(withClientMsgId(fileResponse, clientMsg));
+						continue;
 					} else if (operation === 'broadcastMessage') {
 						endpoint = '/v1/broadcast-message';
-						body.device_id = this.getNodeParameter('deviceId', i);
+						body.device_id = readIdParameter(this, 'deviceId', i);
 						body.label = this.getNodeParameter('label', i);
 						body.numbers = splitList(this.getNodeParameter('numbers', i));
 						const broadcastMessage = this.getNodeParameter('message', i) as string;
-							const broadcastMediaUrl = this.getNodeParameter('mediaUrl', i) as string;
-							if (!broadcastMessage && !broadcastMediaUrl) {
-								throw new NodeOperationError(
-									this.getNode(),
-									'Provide a Broadcast Message, a Media URL, or both',
-									{ itemIndex: i },
-								);
-							}
-							if (broadcastMessage) body.message = broadcastMessage;
-							const delay = this.getNodeParameter('delay', i) as number;
+						const broadcastMediaUrl = this.getNodeParameter('mediaUrl', i) as string;
+						if (!broadcastMessage && !broadcastMediaUrl) {
+							throw new NodeOperationError(
+								this.getNode(),
+								'Provide a Broadcast Message, a Media URL, or both',
+								{ itemIndex: i },
+							);
+						}
+						if (broadcastMessage) body.message = broadcastMessage;
+						const delay = this.getNodeParameter('delay', i) as number;
 						if (delay) body.delay = delay;
 						const delayMin = this.getNodeParameter('delayMin', i) as number;
 						if (delayMin) body.delayMin = delayMin;
 						const delayMax = this.getNodeParameter('delayMax', i) as number;
 						if (delayMax) body.delayMax = delayMax;
 						if (broadcastMediaUrl) body.media_url = broadcastMediaUrl;
-							const startedAt = this.getNodeParameter('startedAt', i) as string;
-							if (startedAt) body.started_at = startedAt;
-						} else if (operation === 'messageStatus') {
-							endpoint = '/v1/message-status';
-							body.device_id = this.getNodeParameter('deviceId', i);
-							body.clientMsgId = (this.getNodeParameter('clientMsgId', i) as string).trim();
-						}
+						const startedAt = this.getNodeParameter('startedAt', i) as string;
+						if (startedAt) body.started_at = startedAt;
+					} else if (operation === 'messageStatus') {
+						endpoint = '/v1/message-status';
+						body.device_id = readIdParameter(this, 'deviceId', i);
+						body.clientMsgId = (this.getNodeParameter('clientMsgId', i) as string).trim();
+					}
 				} else if (resource === 'device') {
 					if (operation === 'createDevice') {
 						endpoint = '/v1/create-device';
@@ -1882,19 +1948,19 @@ export class Kirimi implements INodeType {
 						if (voucherCode) body.voucher_code = voucherCode;
 					} else if (operation === 'connectDevice') {
 						endpoint = '/v1/connect-device';
-						body.device_id = this.getNodeParameter('deviceId', i);
+						body.device_id = readIdParameter(this, 'deviceId', i);
 					} else if (operation === 'renewDevice') {
 						endpoint = '/v1/renew-device';
-						body.device_id = this.getNodeParameter('deviceId', i);
+						body.device_id = readIdParameter(this, 'deviceId', i);
 						body.package_id = this.getNodeParameter('packageId', i);
 						const voucherCode = this.getNodeParameter('voucherCode', i) as string;
 						if (voucherCode) body.voucher_code = voucherCode;
 					} else if (operation === 'deviceStatus') {
 						endpoint = '/v1/device-status';
-						body.device_id = this.getNodeParameter('deviceId', i);
+						body.device_id = readIdParameter(this, 'deviceId', i);
 					} else if (operation === 'deviceStatusEnhanced') {
 						endpoint = '/v1/device-status-enhanced';
-						body.device_id = this.getNodeParameter('deviceId', i);
+						body.device_id = readIdParameter(this, 'deviceId', i);
 					} else if (operation === 'listDevices') {
 						endpoint = '/v1/list-devices';
 						body.page = this.getNodeParameter('listDevicesPage', i) as number;
@@ -1905,7 +1971,7 @@ export class Kirimi implements INodeType {
 						endpoint = '/v1/save-contact';
 						body.nama = this.getNodeParameter('nama', i);
 						body.nomor = this.getNodeParameter('nomor', i);
-						const deviceId = this.getNodeParameter('deviceId', i) as string;
+						const deviceId = readIdParameter(this, 'deviceId', i);
 						if (deviceId) body.device_id = deviceId;
 					} else if (operation === 'saveContactsBulk') {
 						endpoint = '/v1/save-contacts-bulk';
@@ -1918,7 +1984,7 @@ export class Kirimi implements INodeType {
 							);
 						}
 						body.contacts = contacts as IDataObject[];
-						const deviceId = this.getNodeParameter('deviceId', i) as string;
+						const deviceId = readIdParameter(this, 'deviceId', i);
 						if (deviceId) body.device_id = deviceId;
 					}
 				} else if (resource === 'deposit') {
@@ -1953,7 +2019,7 @@ export class Kirimi implements INodeType {
 				} else if (resource === 'waba') {
 					if (operation === 'sendWabaMessage') {
 						endpoint = '/v1/waba/send-message';
-						body.waba_id = this.getNodeParameter('wabaId', i);
+						body.waba_id = readIdParameter(this, 'wabaId', i);
 						body.to = this.getNodeParameter('to', i);
 						body.template_name = this.getNodeParameter('templateName', i);
 						const variables = splitList(this.getNodeParameter('variables', i));
@@ -1968,7 +2034,7 @@ export class Kirimi implements INodeType {
 						}
 					} else if (operation === 'replyMessage') {
 						endpoint = '/v1/waba/messages/reply';
-						body.waba_id = this.getNodeParameter('wabaId', i);
+						body.waba_id = readIdParameter(this, 'wabaId', i);
 						body.to = this.getNodeParameter('to', i);
 						body.message = parseJson(this.getNodeParameter('replyMessage', i)) as IDataObject;
 					} else if (operation === 'listConversations') {
@@ -1977,92 +2043,95 @@ export class Kirimi implements INodeType {
 						body.page = this.getNodeParameter('conversationPage', i) as number;
 					} else if (operation === 'syncTemplates') {
 						endpoint = '/v1/waba/templates/sync';
-						body.waba_id = this.getNodeParameter('wabaId', i);
+						body.waba_id = readIdParameter(this, 'wabaId', i);
 					} else if (operation === 'sendOtp') {
 						endpoint = '/v1/waba/send-otp';
-						body.waba_id = this.getNodeParameter('wabaId', i);
+						body.waba_id = readIdParameter(this, 'wabaId', i);
 						body.to = this.getNodeParameter('to', i);
 						body.template_name = this.getNodeParameter('templateName', i);
 					} else if (operation === 'verifyOtp') {
 						endpoint = '/v1/waba/verify-otp';
-						body.waba_id = this.getNodeParameter('wabaId', i);
+						body.waba_id = readIdParameter(this, 'wabaId', i);
 						body.to = this.getNodeParameter('to', i);
 						body.otp_code = this.getNodeParameter('otpCode', i);
 					}
 				}
 
 				if (resource === 'webhook') {
-						const scope = operation === 'unsubscribe' ? '' : (this.getNodeParameter('webhookScope', i) as string);
-						const scopeKey = scope === 'waba' ? 'waba_id' : 'device_id';
-						const scopeId = scope === 'waba'
-							? (this.getNodeParameter('webhookWabaId', i) as string)
+					const scope =
+						operation === 'unsubscribe' ? '' : (this.getNodeParameter('webhookScope', i) as string);
+					const scopeKey = scope === 'waba' ? 'waba_id' : 'device_id';
+					const scopeId =
+						scope === 'waba'
+							? readIdParameter(this, 'webhookWabaId', i)
 							: scope === 'device'
-								? (this.getNodeParameter('webhookDeviceId', i) as string)
+								? readIdParameter(this, 'webhookDeviceId', i)
 								: '';
 
-						if (operation === 'subscribe') {
-							endpoint = '/v1/webhook/subscribe';
-							const eventsParam = scope === 'waba' ? 'webhookWabaEvents' : 'webhookDeviceEvents';
-							const events = this.getNodeParameter(eventsParam, i) as string[];
-							if (events.length < 1 || events.length > MAX_SUBSCRIPTION_EVENTS) {
-								throw new NodeOperationError(
-									this.getNode(),
-									`Select between 1 and ${MAX_SUBSCRIPTION_EVENTS} events`,
-									{ itemIndex: i },
-								);
-							}
-							const allowed = scope === 'waba' ? WABA_EVENTS : DEVICE_EVENTS;
-							const unknownEvents = events.filter((event) => !allowed.includes(event));
-							if (unknownEvents.length > 0) {
-								throw new NodeOperationError(
-									this.getNode(),
-									`Unknown events for scope "${scope}": ${unknownEvents.join(', ')}`,
-									{ itemIndex: i },
-								);
-							}
-							const targetUrl = (this.getNodeParameter('targetUrl', i) as string).trim();
-							if (!/^https:\/\//i.test(targetUrl) || targetUrl.length > 500) {
-								throw new NodeOperationError(
-									this.getNode(),
-									'Target URL must be an https URL of at most 500 characters',
-									{ itemIndex: i },
-								);
-							}
-							body[scopeKey] = scopeId;
-							body.target_url = targetUrl;
-							body.events = events;
-							const label = this.getNodeParameter('webhookLabel', i) as string;
-							if (label) body.label = label;
-						} else if (operation === 'unsubscribe') {
-							endpoint = '/v1/webhook/unsubscribe';
-							body.id = this.getNodeParameter('subscriptionId', i);
-						} else if (operation === 'listEvents') {
-							endpoint = '/v1/webhook/events';
-							body[scopeKey] = scopeId;
-							const filterParam = scope === 'waba' ? 'webhookEventFilterWaba' : 'webhookEventFilterDevice';
-							const eventFilter = this.getNodeParameter(filterParam, i, []) as string[];
-							if (eventFilter.length > 0) body.events = eventFilter;
-							body.limit = this.getNodeParameter('webhookEventsLimit', i) as number;
+					if (operation === 'subscribe') {
+						endpoint = '/v1/webhook/subscribe';
+						const eventsParam = scope === 'waba' ? 'webhookWabaEvents' : 'webhookDeviceEvents';
+						const events = this.getNodeParameter(eventsParam, i) as string[];
+						if (events.length < 1 || events.length > MAX_SUBSCRIPTION_EVENTS) {
+							throw new NodeOperationError(
+								this.getNode(),
+								`Select between 1 and ${MAX_SUBSCRIPTION_EVENTS} events`,
+								{ itemIndex: i },
+							);
 						}
-
-						const webhookResponse = await kirimiApiRequest.call(this, method, endpoint, body);
-						if (operation === 'listEvents') {
-							const listItems = ((webhookResponse?.data?.items ?? []) as IDataObject[]);
-							returnData.push(...listItems);
-						} else {
-							returnData.push(webhookResponse);
+						const allowed = scope === 'waba' ? WABA_EVENTS : DEVICE_EVENTS;
+						const unknownEvents = events.filter((event) => !allowed.includes(event));
+						if (unknownEvents.length > 0) {
+							throw new NodeOperationError(
+								this.getNode(),
+								`Unknown events for scope "${scope}": ${unknownEvents.join(', ')}`,
+								{ itemIndex: i },
+							);
 						}
-						continue;
+						const targetUrl = (this.getNodeParameter('targetUrl', i) as string).trim();
+						if (!/^https:\/\//i.test(targetUrl) || targetUrl.length > 500) {
+							throw new NodeOperationError(
+								this.getNode(),
+								'Target URL must be an https URL of at most 500 characters',
+								{ itemIndex: i },
+							);
+						}
+						body[scopeKey] = scopeId;
+						body.target_url = targetUrl;
+						body.events = events;
+						const label = this.getNodeParameter('webhookLabel', i) as string;
+						if (label) body.label = label;
+					} else if (operation === 'unsubscribe') {
+						endpoint = '/v1/webhook/unsubscribe';
+						body.id = this.getNodeParameter('subscriptionId', i);
+					} else if (operation === 'listEvents') {
+						endpoint = '/v1/webhook/events';
+						body[scopeKey] = scopeId;
+						const filterParam =
+							scope === 'waba' ? 'webhookEventFilterWaba' : 'webhookEventFilterDevice';
+						const eventFilter = this.getNodeParameter(filterParam, i, []) as string[];
+						if (eventFilter.length > 0) body.events = eventFilter;
+						body.limit = this.getNodeParameter('webhookEventsLimit', i) as number;
 					}
 
-					const responseData = await kirimiApiRequest.call(this, method, endpoint, body, {}, headers);
-					returnData.push(responseData);
+					const webhookResponse = await kirimiApiRequest.call(this, method, endpoint, body);
+					if (operation === 'listEvents') {
+						const listItems = (webhookResponse?.data?.items ?? []) as IDataObject[];
+						returnData.push(...listItems);
+					} else {
+						returnData.push(webhookResponse as IDataObject);
+					}
+					continue;
+				}
+
+				const responseData = await kirimiApiRequest.call(this, method, endpoint, body, {}, headers);
+				returnData.push(withClientMsgId(responseData, clientMsg));
 			} catch (error) {
 				if (this.continueOnFail()) {
 					returnData.push({ error: (error as Error).message });
 					continue;
 				}
-				throw error;
+				throw asNodeError(this.getNode(), error);
 			}
 		}
 
