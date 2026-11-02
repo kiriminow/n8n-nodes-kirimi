@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.1
+
+### Changed
+- OTP (Send OTP V2, device method): the default and placeholder of **Custom Message (for Device Method)** are
+  now in English, per the n8n verification guidelines. Workflows that never edited this field send the new
+  English default; set the field explicitly to keep a custom (e.g. Indonesian) text.
+
 ## 1.5.0
 
 Verification readiness and usability release. Saved workflows keep working: no parameter name or option value

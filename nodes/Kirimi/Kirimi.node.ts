@@ -794,10 +794,10 @@ export class Kirimi implements INodeType {
 					},
 				},
 				default:
-					'🔐 Kode OTP {{app_name}}\n\nKode verifikasi Anda: {{otp}}\n\nBerlaku 5 menit. Jangan bagikan!',
+					'🔐 OTP {{app_name}}\n\nYour verification code: {{otp}}\n\nValid for 5 minutes. Do not share!',
 				description:
 					'Custom message template. Must contain {{otp}} placeholder. Optionally use {{app_name}}.',
-				placeholder: '🔐 Kode OTP {{app_name}}\n\nKode verifikasi: {{otp}}\n\nBerlaku 5 menit.',
+				placeholder: '🔐 OTP {{app_name}}\n\nYour verification code: {{otp}}\n\nValid for 5 minutes.',
 			},
 			{
 				displayName: 'WABA ID (for WABA User Method)',
