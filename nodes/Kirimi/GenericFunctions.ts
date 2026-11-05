@@ -175,3 +175,47 @@ export async function kirimiMultipartRequest(
 		throw wrapKirimiError(this.getNode(), error);
 	}
 }
+
+/** Largest page the paging helper requests. The server caps list endpoints at 100-200 per page. */
+export const PAGE_SIZE = 100;
+
+const arrayAt = (value: unknown, path: string): IDataObject[] => {
+	const found = path
+		.split('.')
+		.reduce<unknown>(
+			(current, key) =>
+				current && typeof current === 'object'
+					? (current as Record<string, unknown>)[key]
+					: undefined,
+			value,
+		);
+	return Array.isArray(found) ? (found as IDataObject[]) : [];
+};
+
+/**
+ * Collect the records of a paginated list endpoint. Sends `page` and `limit` in the body, reads the
+ * records from `itemsPath` (dot path inside the response, e.g. `data.devices`) and stops on a short or
+ * empty page, or as soon as `limit` records are collected. Without `limit` every page is fetched.
+ */
+export async function kirimiApiRequestAllItems(
+	this: KirimiRequestContext,
+	endpoint: string,
+	body: IDataObject,
+	itemsPath: string,
+	limit?: number,
+): Promise<IDataObject[]> {
+	const pageSize = limit === undefined ? PAGE_SIZE : Math.max(1, Math.min(limit, PAGE_SIZE));
+	const collected: IDataObject[] = [];
+	for (let page = 1; ; page++) {
+		const response = await kirimiApiRequest.call(this, 'POST', endpoint, {
+			...body,
+			page,
+			limit: pageSize,
+		});
+		const records = arrayAt(response, itemsPath);
+		collected.push(...records);
+		if (records.length < pageSize) break;
+		if (limit !== undefined && collected.length >= limit) break;
+	}
+	return limit === undefined ? collected : collected.slice(0, limit);
+}

@@ -92,7 +92,7 @@ if (exists('nodes/Kirimi/Kirimi.node.ts')) {
 		["operation 'unsubscribe'", "value: 'unsubscribe'"],
 		["operation 'listEvents'", "value: 'listEvents'"],
 		['usableAsTool', 'usableAsTool: true'],
-		['node versions [1, 2]', 'version: [1, LOCATOR_VERSION]'],
+		['node versions [1, 2, 3]', 'version: [1, LOCATOR_VERSION, COLLECTION_VERSION]'],
 		['auto client message id', "name: 'autoClientMsgId'"],
 	].forEach(([label, needle]) => check(source.includes(needle), label));
 }

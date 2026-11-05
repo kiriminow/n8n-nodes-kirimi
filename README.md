@@ -52,17 +52,22 @@ Both values are shown in the Kirimi dashboard under API credentials. The credent
 
 ## Kirimi node
 
-Pick a **Resource**, then an **Operation**. Every operation returns the API response as one n8n item
-(List Events returns one item per event).
+Pick a **Resource**, then an **Operation**. Every operation returns the API response as one n8n item.
+List Events, List Devices, List Deposits and List Conversations (node version 3) return one item per record.
+
+Optional parameters live in an **Additional Fields** collection (or **Filters** for list operations): click
+*Add Field* / *Add Filter* to pick the ones you need. Required parameters stay at the top level. The list
+operations offer **Return All** (pages through the API automatically) or a **Limit**; there is no Page field.
+Workflows saved on node version 1 or 2 keep the old top-level optional fields and the old Page / Limit fields.
 
 ### Message
 
 | Operation | Endpoint | Notes |
 |-----------|----------|-------|
-| Send Message | `/v1/send-message` | Text and/or media URL, optional quoted message, typing effect |
+| Send Message | `/v1/send-message` | Text; Additional Fields: media URL, file name, quoted message, typing effect, client message ID |
 | Send Message Fast | `/v1/send-message-fast` | Same without typing effect |
 | Send Message File | `/v1/send-message-file` | Uploads a binary property of the incoming item (multipart, max 50 MB) |
-| Broadcast Message | `/v1/broadcast-message` | Label, numbers, delays, optional schedule. Max 1000 numbers per call, 10 broadcasts per hour. A message, a media URL, or both is required |
+| Broadcast Message | `/v1/broadcast-message` | Label, numbers; Additional Fields: media URL, delays, schedule. Max 1000 numbers per call, 10 broadcasts per hour. A message, a media URL, or both is required |
 | Get Message Status | `/v1/message-status` | Look up a message by its Client Message ID |
 
 ### OTP
@@ -82,9 +87,9 @@ one has expired or its attempts are used up.
 
 | Operation | Endpoint |
 |-----------|----------|
-| Send Template Message | `/v1/waba/send-message` (variables, header and dynamic URL / copy-code buttons) |
+| Send Template Message | `/v1/waba/send-message` (Additional Fields: variables, header and dynamic URL / copy-code buttons) |
 | Reply Message | `/v1/waba/messages/reply` |
-| List Conversations | `/v1/waba/conversations` |
+| List Conversations | `/v1/waba/conversations` (Return All / Limit, one item per conversation) |
 | Sync Templates | `/v1/waba/templates/sync` |
 | Send OTP / Verify OTP | `/v1/waba/send-otp`, `/v1/waba/verify-otp` |
 
@@ -92,26 +97,28 @@ one has expired or its attempts are used up.
 
 Create Device, Connect Device, Renew Device, Device Status, Device Status Enhanced, List Devices
 (`/v1/create-device`, `/v1/connect-device`, `/v1/renew-device`, `/v1/device-status`,
-`/v1/device-status-enhanced`, `/v1/list-devices`).
+`/v1/device-status-enhanced`, `/v1/list-devices`). List Devices has Return All / Limit and returns one item
+per device. The voucher code of Create / Renew Device is an Additional Field.
 
 ### Contact
 
 Save Contact and Save Contacts (Bulk, up to 1000 entries) (`/v1/save-contact`, `/v1/save-contacts-bulk`),
-optionally into a specific device.
+optionally into a specific device (Additional Fields > Device).
 
 ### Package, Deposit, User
 
 List Packages, Create / Cancel / List Deposits, Deposit Status, User Info
 (`/v1/list-packages`, `/v1/create-deposit`, `/v1/cancel-deposit`, `/v1/list-deposits`, `/v1/deposit-status`,
-`/v1/user-info`).
+`/v1/user-info`). Deposit > List Deposits has Return All / Limit and a Status filter (Filters), one item per
+deposit.
 
 ### Webhook Subscription
 
 | Operation | Endpoint | Notes |
 |-----------|----------|-------|
-| Subscribe | `/v1/webhook/subscribe` | https target URL, scope (device or WABA), 1-20 events, optional label. The response contains the signing `secret`, returned **once**: store it |
+| Subscribe | `/v1/webhook/subscribe` | https target URL, scope (device or WABA), 1-20 events, optional label (Additional Fields). The response contains the signing `secret`, returned **once**: store it |
 | Unsubscribe | `/v1/webhook/unsubscribe` | By subscription id |
-| List Events | `/v1/webhook/events` | Recent events of a device or WABA, limit 1-100, one item per event |
+| List Events | `/v1/webhook/events` | Recent events of a device or WABA, limit 1-100, optional event filter (Filters), one item per event |
 
 ### Errors
 
@@ -294,6 +301,10 @@ Broadcast Message.
 - Version 1.5.0 introduces **node version 2** of Kirimi and Kirimi Trigger (device and WABA pickers).
   Workflows saved with earlier versions keep node version 1 and their plain-text IDs and keep working
   unchanged; newly added nodes use version 2. All parameter names and option values are unchanged.
+- Version 1.6.0 introduces **node version 3** of Kirimi: optional parameters move into Additional Fields /
+  Filters collections and list operations use Return All + Limit and output one item per record. Workflows
+  saved on node version 1 or 2 keep their top-level parameters and output shape; newly added nodes use
+  version 3. Kirimi Trigger is unchanged.
 - See [CHANGELOG.md](./CHANGELOG.md).
 
 ## Development

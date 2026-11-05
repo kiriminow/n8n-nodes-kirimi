@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.6.0
+
+Node version 3 of Kirimi (new default for newly added nodes). Workflows saved on node version 1 or 2 keep
+their top-level parameters and output shape; nothing changes for them. Kirimi Trigger and Kirimi Polling
+Trigger are unchanged.
+
+### Changed (node version 3)
+- **Additional Fields / Filters**: optional parameters moved into one collection per operation: OTP (Generate
+  OTP, Send OTP V2, Create OTP Reverse), Message (Send Message, Send Message Fast, Send Message File,
+  Broadcast Message), Webhook (Subscribe label, List Events event filter), Contact (device), Device (voucher
+  code), Deposit (status filter) and WABA (Send Template Message variables, header, buttons). Required
+  parameters stay at the top level.
+- **Return All + Limit** on List Devices, List Deposits and List Conversations replace the Page and Limit
+  fields. The node pages through the API automatically (100 per request) and stops at the limit.
+- List Devices, List Deposits and List Conversations output **one item per record** instead of the raw API
+  response.
+
 ## 1.5.1
 
 ### Changed

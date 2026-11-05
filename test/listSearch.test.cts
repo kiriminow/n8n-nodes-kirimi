@@ -112,13 +112,13 @@ describe('list search requests', () => {
 describe('Kirimi node versioning', () => {
 	const { properties, version, defaultVersion, usableAsTool } = new Kirimi().description;
 
-	it('is versioned [1, 2] with usableAsTool', () => {
-		assert.deepEqual(version, [1, 2]);
-		assert.equal(defaultVersion, 2);
+	it('is versioned [1, 2, 3] with usableAsTool', () => {
+		assert.deepEqual(version, [1, 2, 3]);
+		assert.equal(defaultVersion, 3);
 		assert.equal(usableAsTool, true);
 	});
 
-	it('keeps every device/WABA id as a plain string for version 1 and a locator for version 2', () => {
+	it('keeps every device/WABA id as a plain string for version 1 and a locator for versions 2 and 3', () => {
 		const idNames = [
 			'deviceId',
 			'deviceIdV2',
@@ -135,7 +135,9 @@ describe('Kirimi node versioning', () => {
 			if (prop.type === 'string') assert.deepEqual(versions, [1]);
 			else {
 				assert.equal(prop.type, 'resourceLocator');
-				assert.deepEqual(versions, [2]);
+				// Contact > Device moved into a collection in version 3, so its top-level locator stops at 2
+				const contact = prop.displayOptions?.show?.resource?.includes('contact');
+				assert.deepEqual(versions, contact ? [2] : [2, 3]);
 				assert.deepEqual(prop.default, { mode: 'list', value: '' });
 				assert.deepEqual(
 					prop.modes?.map((m) => m.name),

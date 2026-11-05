@@ -2,7 +2,11 @@ import type { IGetNodeParameterOptions, INodeProperties, INodePropertyMode } fro
 
 /** Node version that introduced the resource locators. Version 1 keeps the plain string fields. */
 export const LOCATOR_VERSION = 2;
+/** Node version that moved optional parameters into collections and added Return All + Limit. */
+export const COLLECTION_VERSION = 3;
 export const LEGACY_VERSIONS = [1];
+/** Versions that show the resource locator twin of an ID field. */
+export const LOCATOR_VERSIONS = [LOCATOR_VERSION, COLLECTION_VERSION];
 
 type Kind = 'device' | 'waba';
 
@@ -51,18 +55,25 @@ const MODES: Record<Kind, INodePropertyMode[]> = {
 	waba: buildModes('searchWabaAccounts', 'Select a WABA...', 'Your WABA ID'),
 };
 
+/** Restrict a field to the given node versions, intersecting with a version gate it already has. */
 const withVersion = (
 	displayOptions: INodeProperties['displayOptions'],
 	versions: number[],
-): INodeProperties['displayOptions'] => ({
-	...displayOptions,
-	show: { ...displayOptions?.show, '@version': versions },
-});
+): INodeProperties['displayOptions'] => {
+	const existing = displayOptions?.show?.['@version'] as number[] | undefined;
+	return {
+		...displayOptions,
+		show: {
+			...displayOptions?.show,
+			'@version': existing ? versions.filter((v) => existing.includes(v)) : versions,
+		},
+	};
+};
 
 /**
  * Backward compatible upgrade of ID fields to resource locators. Every string field holding a device
  * or WABA ID is kept as-is for node version 1 (saved workflows keep their value) and gets a resource
- * locator twin with the same name for node version 2 and later. Read either one with
+ * locator twin with the same name for node version 2 and later (2 and 3). Read either one with
  * getNodeParameter(name, i, '', { extractValue: true }).
  */
 export const withResourceLocators = (properties: INodeProperties[]): INodeProperties[] =>
@@ -79,7 +90,7 @@ export const withResourceLocators = (properties: INodeProperties[]): INodeProper
 			type: 'resourceLocator',
 			default: { mode: 'list', value: '' },
 			modes: MODES[kind],
-			displayOptions: withVersion(property.displayOptions, [LOCATOR_VERSION]),
+			displayOptions: withVersion(property.displayOptions, LOCATOR_VERSIONS),
 		};
 		delete (locator as Partial<INodeProperties>).placeholder;
 		return [legacy, locator];
@@ -118,8 +129,10 @@ interface ItemParameters {
 	): unknown;
 }
 
-const asId = (value: unknown): string =>
-	typeof value === 'string' ? value.trim() : String(value ?? '').trim();
+export const asId = (value: unknown): string => {
+	if (value && typeof value === 'object' && 'value' in value) return asId(value.value);
+	return typeof value === 'string' ? value.trim() : String(value ?? '').trim();
+};
 
 /**
  * Read a device or WABA ID parameter, whether it is a plain string (node version 1) or a resource

@@ -22,6 +22,8 @@ export interface MockOptions {
 	mode?: 'manual' | 'trigger' | 'internal';
 	staticData?: IDataObject;
 	binaryBuffer?: Buffer;
+	/** Node typeVersion, default 2. */
+	typeVersion?: number;
 }
 
 export const CREDENTIALS = {
@@ -48,7 +50,11 @@ const resolveParam = (
 export const createContext = (options: MockOptions) => {
 	const requests: RecordedRequest[] = [];
 	const staticData: IDataObject = options.staticData ?? {};
-	const node = { name: options.nodeName ?? 'Kirimi', type: 'kirimi', typeVersion: 2 } as INode;
+	const node = {
+		name: options.nodeName ?? 'Kirimi',
+		type: 'kirimi',
+		typeVersion: options.typeVersion ?? 2,
+	} as INode;
 
 	const record =
 		(kind: RecordedRequest['kind']) =>
