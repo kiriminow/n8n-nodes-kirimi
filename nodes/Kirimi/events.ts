@@ -42,6 +42,23 @@ export const WABA_EVENTS: string[] = [
 
 export const MAX_SUBSCRIPTION_EVENTS = 20;
 
+/**
+ * Extra field Kirimi adds to every forwarded `message` event (QR devices and WABA), best-effort:
+ * `{ id: null, human_handling: false, assigned_team_id: null }` when the state is unknown. Use
+ * Conversation > Get Status when exactness matters (the first message of a chat can race the state).
+ */
+export interface MessageConversationInfo {
+	/** Kirimi conversation ID, null before the conversation exists. */
+	id: string | null;
+	/** True while humans handle the chat (a bot should stay silent). */
+	human_handling: boolean;
+	/** Team member the chat is assigned to, if any. */
+	assigned_team_id: number | null;
+}
+
+/** Events whose payload carries the `conversation` field. */
+export const CONVERSATION_FIELD_EVENTS: string[] = ['message'];
+
 const DEVICE_LABELS: Record<string, string> = {
 	message: 'Message (Incoming)',
 	'message.outgoing': 'Message Outgoing',

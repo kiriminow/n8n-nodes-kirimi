@@ -93,6 +93,28 @@ one has expired or its attempts are used up.
 | Sync Templates | `/v1/waba/templates/sync` |
 | Send OTP / Verify OTP | `/v1/waba/send-otp`, `/v1/waba/verify-otp` |
 
+### Conversation
+
+Hand a customer chat over to the human team (Team Inbox / Chat page in Kirimi) and back to the bot.
+
+| Operation | Endpoint | Parameters |
+|-----------|----------|------------|
+| Handoff to Team | `/v1/conversations/handoff` | Channel (QR Device or WABA Number), Device / WABA Number, Phone; optional Assignee (From List by name and email, By Email, or By Team ID) and Note (max 1000 characters). Idempotent: the output has `already: true` when the chat was already handed off, including when a CS agent took it over manually. Returns 400 for a spam chat, an assignee without access to the device, or a phone containing letters |
+| Get Status | `/v1/conversations/status` | Channel, Device / WABA Number, Phone. Returns `exists`, `conversation_id`, `human_handling`, `reason`, `cs_status`, `assigned_team_id`, `assignee_name`, `assigned_at` |
+| Release to Bot | `/v1/conversations/release` | Channel, Device / WABA Number, Phone; optional Note and Force (default off). Does not change the assignment or resolved status. Returns 409 when a CS agent took the chat over manually, unless Force is on (sends `force: true`) |
+| List Assignees | `/v1/team/assignees` | None. One item per active team member: `team_id`, `name`, `email` |
+
+A conversation is identified by the device and the customer phone. For a QR device use the device ID
+(`D-xxxxx`); for a WABA number use its **phone number ID** (the From List picker fills it in). The phone is
+normalized to digits (`08...` becomes `62...`, `+` and spaces are dropped).
+
+While a chat is handed off (`human_handling: true`) the bot should stay silent. It returns to the bot when
+customer service marks the chat resolved in Kirimi, or when you call Release to Bot. Every `message` event of
+the Kirimi Trigger carries `conversation.human_handling`, see
+[KIRIMI_TRIGGER_README.md](KIRIMI_TRIGGER_README.md). The operations are also exposed as tools for the n8n AI
+Agent (the node is usable as a tool): Get Status before answering, Handoff to Team when the customer asks for
+a human.
+
 ### Device
 
 Create Device, Connect Device, Renew Device, Device Status, Device Status Enhanced, List Devices
@@ -132,7 +154,8 @@ Every Device ID and WABA ID field is a resource locator with two modes:
 
 - **From List**: searchable dropdown filled from `POST /v1/list-devices` (50 per page, more pages load on
   scroll) or `POST /v1/waba/accounts`. If your server does not have the WABA accounts endpoint yet, the list
-  is simply empty: use **By ID**.
+  is simply empty: use **By ID**. The WABA number picker lists only each WABA account's primary number: for a
+  secondary number use the **By Phone Number ID** mode.
 - **By ID**: type or map an ID with an expression, for example `{{ $json.device_id }}`.
 
 ## Idempotency and message status
@@ -286,6 +309,14 @@ A second workflow calls Verify OTP V2 with the phone number and the code the use
 
 **Alert when a device disconnects**
 Kirimi Trigger (events `connection.disconnected`, `logged_out`) > Slack or Telegram message.
+
+**Bot stays silent while humans handle the chat**
+Kirimi Trigger (event `message`, Filter From Me on) > IF (`{{ $json.conversation.human_handling }}` is false) >
+AI Agent / reply logic > Kirimi: Message > Send Message. When the customer asks for a person, the bot calls
+Kirimi: Conversation > Handoff to Team (device, phone `{{ $json.from }}`, optional assignee and note). From
+then on the IF node stops the bot. When customer service marks the chat resolved in Kirimi the bot answers
+again; to give it back earlier, call Conversation > Release to Bot. Before replying to the very first message
+of a chat, add Conversation > Get Status and check `human_handling`.
 
 **Behind NAT, no public URL**
 Kirimi Polling Trigger (event `message`, poll every minute) > Google Sheets: Append Row.
