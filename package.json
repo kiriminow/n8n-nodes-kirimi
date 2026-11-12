@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-kirimi",
-	"version": "1.6.0",
+	"version": "1.7.0",
 	"description": "n8n community node for the Kirimi WhatsApp API (QR devices and WABA Cloud API)",
 	"license": "MIT",
 	"homepage": "https://github.com/kiriminow/n8n-nodes-kirimi",

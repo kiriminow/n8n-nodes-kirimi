@@ -26,7 +26,7 @@ All ten SDKs implement this contract. This file is kept in sync across every SDK
 | `kirimi-ruby` | `bundle exec rake` | 56 pass |
 | `kirimi-flutter` | `dart test` | 44 pass |
 | `kirimi-wordpress` | `vendor/bin/phpunit` | 44 pass |
-| `n8n-nodes-kirimi` (1.5.0: official `@n8n/node-cli` toolchain, resource-locator pickers via `/v1/list-devices` and `/v1/waba/accounts`, credential-based auth, auto client message id, polling trigger on `delivery: "poll"`) | `npm run lint` + `npm run build` + `node validate.js` + `npm test` | 54 pass |
+| `n8n-nodes-kirimi` (1.7.0: Conversation resource (handoff, status, release, assignees); 1.5.0: official `@n8n/node-cli` toolchain, resource-locator pickers via `/v1/list-devices` and `/v1/waba/accounts`, credential-based auth, auto client message id, polling trigger on `delivery: "poll"`) | `npm run lint` + `npm run build` + `node validate.js` + `npm test` | 83 pass |
 
 ## Alias policy
 
@@ -74,7 +74,7 @@ Error codes arrive in `data.code` alongside `message`:
 WABA: success means Meta **accepted** (`delivery_status: "accepted"`), not delivered. Final state arrives via
 webhook as `message.sent` / `message.ack` / `message.failed`.
 
-## Endpoint catalogue (34 public)
+## Endpoint catalogue (38 public)
 
 ### Auth & Device
 
@@ -188,6 +188,23 @@ Callback: `POST` with header `x-kirimi-event: otp-reverse.verified`.
 | `POST /v1/save-contacts-bulk` | `user_code`, `secret`, `contacts: [{nama, nomor}]` (max 1000), `device_id` |
 
 Existing numbers are skipped, not overwritten.
+
+### Conversation handoff
+
+`device_id` is a QR device ID (`D-XXXXX`) or a WABA `phone_number_id`. `phone` is normalized to digits
+(leading `0` becomes `62`). Gated by the `chat` API feature.
+
+| Method + Path | Params |
+|---|---|
+| `POST /v1/conversations/handoff` | `user_code`, `secret`, `device_id`, `phone`, `assignee_team_id` or `assignee_email` (optional), `note` (max 1000). Returns ConversationState plus `already`. `404` when the device or conversation is unknown, `400` for an invalid assignee |
+| `POST /v1/conversations/release` | `user_code`, `secret`, `device_id`, `phone`, `note`. Returns ConversationState plus `already` |
+| `POST /v1/conversations/status` | `user_code`, `secret`, `device_id`, `phone`. Returns ConversationState |
+| `POST /v1/team/assignees` | `user_code`, `secret`. Returns `[{ team_id, name, email }]` (active seats) |
+
+ConversationState: `exists`, `conversation_id`, `device_id`, `phone`, `human_handling` (`ai_enabled === false`),
+`reason` (`handoff`/`manual`/`spam`/`resolved`/null), `cs_status` (`open`/`pending`/`resolved`/`closed`/null),
+`assigned_team_id`, `assignee_name`, `assigned_at`. Webhook `message` events carry
+`conversation: { id, human_handling, assigned_team_id }`.
 
 ### Packages & Deposits
 

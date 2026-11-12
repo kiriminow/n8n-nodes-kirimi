@@ -95,6 +95,24 @@ Incoming text message:
 }
 ```
 
+Every `message` event (QR devices and WABA, push and poll) also carries a `conversation` object, added by
+Kirimi on a best-effort basis; it is always present and holds the defaults below when the state is unknown:
+
+```json
+"conversation": { "id": "8d1c0f0e-...", "human_handling": true, "assigned_team_id": 12 }
+```
+
+| Field | Meaning |
+|-------|---------|
+| `id` | Kirimi conversation ID, `null` when the conversation does not exist yet |
+| `human_handling` | `true` while the human team handles the chat: an IF node can stop the bot from replying |
+| `assigned_team_id` | Team member the chat is assigned to, or `null` |
+
+When the state is unknown the field falls back to `{ "id": null, "human_handling": false, "assigned_team_id": null }`.
+For the first message of a chat, or whenever exactness matters, call **Kirimi: Conversation > Get Status**
+before replying. Hand a chat over with **Conversation > Handoff to Team**; it returns to the bot when
+customer service marks it resolved in Kirimi, or when you call **Release to Bot**.
+
 Incoming image: the same fields with `messageType: "image"`, `mediaUrl` and `caption`.
 
 Connection event:

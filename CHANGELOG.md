@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.7.0
+
+New **Conversation** resource in the Kirimi node for human handoff. No existing parameter changed, so no node
+version bump: saved workflows are unaffected. Requires a Kirimi server with the conversation endpoints.
+
+### Added
+- **Conversation > Handoff to Team** (`/v1/conversations/handoff`): hand a chat to the human team so the bot
+  stops replying; optional Assignee (picker by name and email, By Email, By Team ID) and Note. Idempotent
+  (`already`).
+- **Conversation > Get Status** (`/v1/conversations/status`): `human_handling`, reason, status and assignee of
+  a chat.
+- **Conversation > Release to Bot** (`/v1/conversations/release`) and **List Assignees** (`/v1/team/assignees`,
+  one item per team member).
+- Channel switch for the conversation operations: QR Device (device ID) or WABA Number (phone number ID picker
+  via `/v1/waba/accounts`). The phone is normalized (`08...` becomes `62...`).
+- Kirimi Trigger docs: `message` events carry `conversation: { id, human_handling, assigned_team_id }`, so a
+  workflow can stay silent while humans handle the chat.
+
 ## 1.6.0
 
 Node version 3 of Kirimi (new default for newly added nodes). Workflows saved on node version 1 or 2 keep

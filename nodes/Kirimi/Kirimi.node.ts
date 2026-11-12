@@ -25,12 +25,28 @@ import {
 	deviceEventOptions,
 	wabaEventOptions,
 } from './events';
-import { searchDevices, searchWabaAccounts } from './listSearch';
+import {
+	CONVERSATION_ENDPOINTS,
+	assigneesFromResponse,
+	buildHandoffBody,
+	buildReleaseBody,
+	buildStatusBody,
+	readAssignee,
+	unwrapData,
+	validateIdentity,
+} from './conversation';
+import {
+	searchDevices,
+	searchTeamAssignees,
+	searchWabaAccounts,
+	searchWabaNumbers,
+} from './listSearch';
 import { collectionProperties, gateFlatFields, optionReader } from './collections';
 import {
 	COLLECTION_VERSION,
 	LOCATOR_VERSION,
 	asId,
+	deviceLocatorProperty,
 	readIdParameter,
 	withResourceLocators,
 } from './locators';
@@ -111,7 +127,7 @@ export class Kirimi implements INodeType {
 		defaultVersion: COLLECTION_VERSION,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
 		description:
-			'Interact with the Kirimi WhatsApp API (QR devices, WABA, OTP, Devices, Deposits, Webhooks)',
+			'Interact with the Kirimi WhatsApp API (QR devices, WABA, OTP, Devices, Deposits, Webhooks, Conversation handoff)',
 		defaults: {
 			name: 'Kirimi',
 		},
@@ -136,6 +152,11 @@ export class Kirimi implements INodeType {
 							name: 'Contact',
 							value: 'contact',
 							description: 'Contact management operations',
+						},
+						{
+							name: 'Conversation',
+							value: 'conversation',
+							description: 'Hand a chat over to the human team and back to the bot',
 						},
 						{
 							name: 'Deposit',
@@ -361,6 +382,51 @@ export class Kirimi implements INodeType {
 						},
 					],
 					default: 'saveContact',
+					required: true,
+				},
+
+				// ── Conversation Operations ──────────────────────────────────────────────
+				{
+					displayName: 'Operation',
+					name: 'operation',
+					type: 'options',
+					noDataExpression: true,
+					displayOptions: {
+						show: {
+							resource: ['conversation'],
+						},
+					},
+					options: [
+						{
+							name: 'Get Status',
+							value: 'getStatus',
+							description:
+								'Check whether humans are handling a chat (human_handling), who it is assigned to and its status. Call this before a bot replies to a customer.',
+							action: 'Get conversation status',
+						},
+						{
+							name: 'Handoff to Team',
+							value: 'handoff',
+							description:
+								'Hand a customer chat over to the human team (optionally to a specific team member) so the bot stops replying. The chat returns to the bot when customer service marks it resolved in Kirimi, or when you call Release to Bot. Idempotent: returns already: true when the chat is already handed off, including when a CS agent took it over manually. Fails with 400 for a spam chat, an assignee without access to the device, or a phone containing letters. The Kirimi Trigger message payload includes conversation.human_handling so a workflow can stay silent while humans handle the chat.',
+							action: 'Hand a conversation off to the team',
+						},
+						{
+							name: 'List Assignees',
+							value: 'listAssignees',
+							description:
+								'List the active team members (team_id, name, email) a conversation can be assigned to. Returns one item per member.',
+							action: 'List team assignees',
+						},
+						{
+							name: 'Release to Bot',
+							value: 'release',
+							description:
+								'Give a chat back to the bot after a human handled it. Does not change the assignment or resolved status. Fails with 409 when a CS agent took the chat over manually, unless Force is enabled.',
+							action: 'Release a conversation to the bot',
+						},
+					],
+					default: 'handoff',
 					required: true,
 				},
 
@@ -1460,6 +1526,132 @@ export class Kirimi implements INodeType {
 					description: 'Optional device ID the contacts should be saved to',
 				},
 
+				// ── Conversation Fields ──────────────────────────────────────────────────
+				{
+					displayName: 'Channel',
+					name: 'conversationChannel',
+					type: 'options',
+					displayOptions: {
+						show: { resource: ['conversation'], operation: ['handoff', 'getStatus', 'release'] },
+					},
+					options: [
+						{ name: 'QR Device', value: 'device', description: 'WhatsApp connected by QR code' },
+						{
+							name: 'WABA Number',
+							value: 'waba',
+							description: 'WhatsApp Business API (Cloud API) phone number',
+						},
+					],
+					default: 'device',
+					description: 'Which WhatsApp channel the chat is on',
+				},
+				deviceLocatorProperty({
+					displayName: 'Device',
+					name: 'conversationDeviceId',
+					required: true,
+					displayOptions: {
+						show: {
+							resource: ['conversation'],
+							operation: ['handoff', 'getStatus', 'release'],
+							conversationChannel: ['device'],
+						},
+					},
+					description: 'The QR device the chat is on (device ID, e.g. D-2J3IG)',
+				}),
+				{
+					displayName: 'WABA Number',
+					name: 'conversationWabaNumberId',
+					type: 'resourceLocator',
+					required: true,
+					default: { mode: 'list', value: '' },
+					displayOptions: {
+						show: {
+							resource: ['conversation'],
+							operation: ['handoff', 'getStatus', 'release'],
+							conversationChannel: ['waba'],
+						},
+					},
+					description: 'The WABA phone number the chat is on (its phone number ID)',
+					modes: [
+						{
+							displayName: 'From List',
+							name: 'list',
+							type: 'list',
+							placeholder: 'Select a WABA number...',
+							typeOptions: { searchListMethod: 'searchWabaNumbers', searchable: true },
+						},
+						{
+							displayName: 'By Phone Number ID',
+							name: 'id',
+							type: 'string',
+							placeholder: '123456789012345',
+						},
+					],
+				},
+				{
+					displayName: 'Phone',
+					name: 'conversationPhone',
+					type: 'string',
+					required: true,
+					displayOptions: {
+						show: { resource: ['conversation'], operation: ['handoff', 'getStatus', 'release'] },
+					},
+					default: '',
+					placeholder: '628123456789',
+					description:
+						'Customer phone number (format: 08xxx, 62xxx, +62xxx). Normalized to digits with country code 62.',
+				},
+				{
+					displayName: 'Assignee',
+					name: 'conversationAssignee',
+					type: 'resourceLocator',
+					default: { mode: 'list', value: '' },
+					displayOptions: { show: { resource: ['conversation'], operation: ['handoff'] } },
+					description:
+						'Team member to assign the chat to. Leave empty to let Kirimi route it or notify the team.',
+					modes: [
+						{
+							displayName: 'From List',
+							name: 'list',
+							type: 'list',
+							placeholder: 'Select a team member...',
+							typeOptions: { searchListMethod: 'searchTeamAssignees', searchable: true },
+						},
+						{
+							displayName: 'By Email',
+							name: 'email',
+							type: 'string',
+							placeholder: 'cs@example.com',
+						},
+						{
+							displayName: 'By Team ID',
+							name: 'id',
+							type: 'string',
+							placeholder: '12',
+						},
+					],
+				},
+				{
+					displayName: 'Note',
+					name: 'conversationNote',
+					type: 'string',
+					typeOptions: { rows: 3 },
+					displayOptions: {
+						show: { resource: ['conversation'], operation: ['handoff', 'release'] },
+					},
+					default: '',
+					description:
+						'Optional note (max 1000 characters). On handoff it is added as a contact note so customer service sees why.',
+				},
+				{
+					displayName: 'Force',
+					name: 'conversationForce',
+					type: 'boolean',
+					displayOptions: { show: { resource: ['conversation'], operation: ['release'] } },
+					default: false,
+					description: 'Whether to return the chat to the bot even if a CS agent took it over manually',
+				},
+
 				// ── Device Fields ────────────────────────────────────────────────────────
 				{
 					displayName: 'Package ID',
@@ -1777,6 +1969,18 @@ export class Kirimi implements INodeType {
 				filter?: string,
 			): Promise<INodeListSearchResult> {
 				return await searchWabaAccounts.call(this, filter);
+			},
+			async searchWabaNumbers(
+				this: ILoadOptionsFunctions,
+				filter?: string,
+			): Promise<INodeListSearchResult> {
+				return await searchWabaNumbers.call(this, filter);
+			},
+			async searchTeamAssignees(
+				this: ILoadOptionsFunctions,
+				filter?: string,
+			): Promise<INodeListSearchResult> {
+				return await searchTeamAssignees.call(this, filter);
 			},
 		},
 	};
@@ -2120,6 +2324,66 @@ export class Kirimi implements INodeType {
 						body.to = this.getNodeParameter('to', i);
 						body.otp_code = this.getNodeParameter('otpCode', i);
 					}
+				}
+
+				if (resource === 'conversation') {
+					if (operation === 'listAssignees') {
+						const response = await kirimiApiRequest.call(
+							this,
+							method,
+							CONVERSATION_ENDPOINTS.listAssignees,
+							{},
+						);
+						returnData.push(...assigneesFromResponse(response));
+						continue;
+					}
+
+					const channel = this.getNodeParameter('conversationChannel', i, 'device') as string;
+					const identity = {
+						deviceId: readIdParameter(
+							this,
+							channel === 'waba' ? 'conversationWabaNumberId' : 'conversationDeviceId',
+							i,
+						),
+						phone: this.getNodeParameter('conversationPhone', i),
+					};
+					const invalid = validateIdentity(identity);
+					if (invalid) throw new NodeOperationError(this.getNode(), invalid, { itemIndex: i });
+
+					try {
+						if (operation === 'handoff') {
+							endpoint = CONVERSATION_ENDPOINTS.handoff;
+							Object.assign(
+								body,
+								buildHandoffBody(
+									identity,
+									readAssignee(this.getNodeParameter('conversationAssignee', i, '')),
+									this.getNodeParameter('conversationNote', i, ''),
+								),
+							);
+						} else if (operation === 'release') {
+							endpoint = CONVERSATION_ENDPOINTS.release;
+							Object.assign(
+								body,
+								buildReleaseBody(
+									identity,
+									this.getNodeParameter('conversationNote', i, ''),
+									this.getNodeParameter('conversationForce', i, false) as boolean,
+								),
+							);
+						} else {
+							endpoint = CONVERSATION_ENDPOINTS.getStatus;
+							Object.assign(body, buildStatusBody(identity));
+						}
+					} catch (error) {
+						throw new NodeOperationError(this.getNode(), (error as Error).message, {
+							itemIndex: i,
+						});
+					}
+
+					const response = await kirimiApiRequest.call(this, method, endpoint, body);
+					returnData.push(unwrapData(response));
+					continue;
 				}
 
 				if (resource === 'webhook') {
