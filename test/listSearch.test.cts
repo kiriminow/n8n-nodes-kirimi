@@ -172,10 +172,10 @@ describe('chat macro and category pickers', () => {
 		{ name: 'no id' },
 	];
 
-	it('maps macros to "<name> (<n> aksi)" and filters by name', () => {
+	it('maps macros to "<name> (<n> actions)" and filters by name', () => {
 		assert.deepEqual(macrosToResults(macros), [
-			{ name: 'Greeting (2 aksi)', value: '3' },
-			{ name: 'Close out (1 aksi)', value: '9' },
+			{ name: 'Greeting (2 actions)', value: '3' },
+			{ name: 'Close out (1 actions)', value: '9' },
 		]);
 		assert.deepEqual(
 			macrosToResults(macros, 'clos').map((r) => r.value),
@@ -201,7 +201,7 @@ describe('chat macro and category pickers', () => {
 			respond: () => ({ data: [{ id: 3, name: 'Greeting', action_count: 2 }] }),
 		});
 		const macroResult = await searchChatMacros.call(macroCtx as never);
-		assert.deepEqual(macroResult.results, [{ name: 'Greeting (2 aksi)', value: '3' }]);
+		assert.deepEqual(macroResult.results, [{ name: 'Greeting (2 actions)', value: '3' }]);
 		assert.ok(macroCtx.requests[0].options.url?.endsWith('/v1/chat-macros/list'));
 
 		const catCtx = createContext({

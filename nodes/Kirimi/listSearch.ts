@@ -199,7 +199,7 @@ const listFromResponse = <T>(response: unknown): T[] => {
 	return Array.isArray(items) ? (items as T[]) : [];
 };
 
-/** Saved chat macros as "Name (N aksi)" with the numeric macro id as value. */
+/** Saved chat macros as "Name (N actions)" with the numeric macro id as value. */
 export const macrosToResults = (
 	macros: KirimiChatMacro[],
 	filter?: string,
@@ -208,7 +208,7 @@ export const macrosToResults = (
 		.filter((macro) => macro.id !== undefined && macro.id !== null)
 		.filter((macro) => matches(filter, macro.name, String(macro.id)))
 		.map((macro) => ({
-			name: `${macro.name || String(macro.id)} (${macro.action_count ?? 0} aksi)`,
+			name: `${macro.name || String(macro.id)} (${macro.action_count ?? 0} actions)`,
 			value: String(macro.id),
 		}));
 
