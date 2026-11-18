@@ -87,11 +87,103 @@ export const buildReleaseBody = (
 	...(force === true ? { force: true } : {}),
 });
 
+/** Max length of an in-thread note sent through Add Note. */
+export const MAX_ACTION_NOTE_LENGTH = 2000;
+export const MAX_ACTOR_NAME_LENGTH = 100;
+export const MAX_IDEMPOTENCY_KEY_LENGTH = 100;
+export const CS_STATUSES = ['open', 'pending', 'resolved', 'closed'] as const;
+
+/** How a conversation action finds its chat: device + phone, or the Kirimi conversation id. */
+export type ConversationTargetInput =
+	| { by: 'devicePhone'; deviceId: string; phone: unknown }
+	| { by: 'conversationId'; conversationId: string };
+
+/** Target body fields. Throws a readable error when the target is incomplete. */
+export const targetBody = (target: ConversationTargetInput): IDataObject => {
+	if (target.by === 'conversationId') {
+		const conversationId = String(target.conversationId ?? '').trim();
+		if (!conversationId) throw new Error('Conversation ID is required');
+		return { conversation_id: conversationId };
+	}
+	const invalid = validateIdentity(target);
+	if (invalid) throw new Error(invalid);
+	return identityBody(target);
+};
+
+const optionalBounded = (value: unknown, label: string, max: number): string | undefined => {
+	const text = String(value ?? '').trim();
+	if (!text) return undefined;
+	if (text.length > max) throw new Error(`${label} must be at most ${max} characters`);
+	return text;
+};
+
+const actorBody = (actorName: unknown): IDataObject => {
+	const name = optionalBounded(actorName, 'Actor name', MAX_ACTOR_NAME_LENGTH);
+	return name ? { actor_name: name } : {};
+};
+
+export const buildApplyMacroBody = (
+	target: ConversationTargetInput,
+	macroId: unknown,
+	actorName?: unknown,
+	idempotencyKey?: unknown,
+): IDataObject => {
+	const id = Number(String(macroId ?? '').trim());
+	if (!Number.isInteger(id) || id <= 0) throw new Error('Macro ID must be a positive whole number');
+	const key = optionalBounded(idempotencyKey, 'Idempotency key', MAX_IDEMPOTENCY_KEY_LENGTH);
+	return {
+		...targetBody(target),
+		macro_id: id,
+		...actorBody(actorName),
+		...(key ? { idempotency_key: key } : {}),
+	};
+};
+
+export const buildAddNoteBody = (
+	target: ConversationTargetInput,
+	text: unknown,
+	actorName?: unknown,
+): IDataObject => {
+	const note = String(text ?? '').trim();
+	if (!note) throw new Error('Note text is required');
+	if (note.length > MAX_ACTION_NOTE_LENGTH) {
+		throw new Error(`Note must be at most ${MAX_ACTION_NOTE_LENGTH} characters`);
+	}
+	return { ...targetBody(target), text: note, ...actorBody(actorName) };
+};
+
+/** `clear` sends `category_id: null` (removes the category); otherwise a category id is required. */
+export const buildSetCategoryBody = (
+	target: ConversationTargetInput,
+	categoryId: unknown,
+	clear: boolean,
+): IDataObject => {
+	if (clear === true) return { ...targetBody(target), category_id: null };
+	const id = String(categoryId ?? '').trim();
+	if (!id) throw new Error('Category is required (or enable Clear Category)');
+	return { ...targetBody(target), category_id: id };
+};
+
+export const buildSetCsStatusBody = (
+	target: ConversationTargetInput,
+	status: unknown,
+): IDataObject => {
+	const value = String(status ?? '').trim();
+	if (!(CS_STATUSES as readonly string[]).includes(value)) {
+		throw new Error(`Status must be one of: ${CS_STATUSES.join(', ')}`);
+	}
+	return { ...targetBody(target), status: value };
+};
+
 export const CONVERSATION_ENDPOINTS = {
 	handoff: '/v1/conversations/handoff',
 	getStatus: '/v1/conversations/status',
 	release: '/v1/conversations/release',
 	listAssignees: '/v1/team/assignees',
+	runMacro: '/v1/conversations/apply-macro',
+	addNote: '/v1/conversations/add-note',
+	setCategory: '/v1/conversations/set-category',
+	setCsStatus: '/v1/conversations/set-cs-status',
 } as const;
 
 /** Unwrap `{ success, data }` to the data object, passing through anything else. */

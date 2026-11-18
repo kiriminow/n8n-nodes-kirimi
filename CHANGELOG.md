@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.8.0
+
+Four new **Conversation** operations to act on a chat from a workflow. No existing parameter changed, so no
+node version bump: saved workflows are unaffected. Requires a Kirimi server with the conversation action
+endpoints.
+
+### Added
+- **Conversation > Run Macro** (`/v1/conversations/apply-macro`): run a saved chat macro (picker via
+  `/v1/chat-macros/list`, or By ID). Optional Actor Name and Idempotency Key (a retry with the same key does
+  not send the reply twice). Stops at the first failed step: the error shows the server message and each step
+  result; with Continue On Fail the full response (`success: false`, `data.results`) is output.
+- **Conversation > Add Note** (`/v1/conversations/add-note`): in-thread note for the team (1-2000 characters,
+  optional Actor Name).
+- **Conversation > Set Category** (`/v1/conversations/set-category`): category picker (via
+  `/v1/chat-categories/list`, or By ID) or Clear Category.
+- **Conversation > Set CS Status** (`/v1/conversations/set-cs-status`): open, pending, resolved or closed;
+  `changed: false` when the chat already has that status.
+- **Target By** on the four new operations: Device and Phone (default) or Conversation ID
+  (`conversation.id` from the Kirimi Trigger message payload).
+
 ## 1.7.0
 
 New **Conversation** resource in the Kirimi node for human handoff. No existing parameter changed, so no node

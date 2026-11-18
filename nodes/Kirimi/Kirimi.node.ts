@@ -13,7 +13,9 @@ import {
 
 import {
 	asNodeError,
+	describeMacroResults,
 	kirimiApiRequest,
+	kirimiApiRequestKeepFailure,
 	kirimiApiRequestAllItems,
 	kirimiMultipartRequest,
 } from './GenericFunctions';
@@ -28,14 +30,21 @@ import {
 import {
 	CONVERSATION_ENDPOINTS,
 	assigneesFromResponse,
+	buildAddNoteBody,
+	buildApplyMacroBody,
 	buildHandoffBody,
 	buildReleaseBody,
+	buildSetCategoryBody,
+	buildSetCsStatusBody,
 	buildStatusBody,
 	readAssignee,
+	type ConversationTargetInput,
 	unwrapData,
 	validateIdentity,
 } from './conversation';
 import {
+	searchChatCategories,
+	searchChatMacros,
 	searchDevices,
 	searchTeamAssignees,
 	searchWabaAccounts,
@@ -116,6 +125,60 @@ function parseJson(value: unknown): unknown {
 	}
 	return value;
 }
+
+/** Conversation operations that locate a chat by device + phone or by conversation ID. */
+const TARGETED_ACTIONS = ['runMacro', 'addNote', 'setCategory', 'setCsStatus'];
+type ActionOperation = 'runMacro' | 'addNote' | 'setCategory' | 'setCsStatus';
+
+/** Request body of a targeted conversation action, read from the node parameters of item `i`. */
+const buildActionBody = (
+	ctx: IExecuteFunctions,
+	i: number,
+	operation: ActionOperation,
+): IDataObject => {
+	const target: ConversationTargetInput =
+		ctx.getNodeParameter('targetBy', i, 'devicePhone') === 'conversationId'
+			? {
+					by: 'conversationId',
+					conversationId: String(ctx.getNodeParameter('conversationId', i, '')),
+				}
+			: {
+					by: 'devicePhone',
+					deviceId: readIdParameter(
+						ctx,
+						ctx.getNodeParameter('conversationChannel', i, 'device') === 'waba'
+							? 'conversationWabaNumberId'
+							: 'conversationDeviceId',
+						i,
+					),
+					phone: ctx.getNodeParameter('conversationPhone', i, ''),
+				};
+	const actorName = (): unknown => ctx.getNodeParameter('conversationActorName', i, '');
+	if (operation === 'runMacro') {
+		return buildApplyMacroBody(
+			target,
+			readIdParameter(ctx, 'conversationMacro', i),
+			actorName(),
+			ctx.getNodeParameter('conversationIdempotencyKey', i, ''),
+		);
+	}
+	if (operation === 'addNote') {
+		return buildAddNoteBody(
+			target,
+			ctx.getNodeParameter('conversationNoteText', i, ''),
+			actorName(),
+		);
+	}
+	if (operation === 'setCategory') {
+		const clear = ctx.getNodeParameter('clearCategory', i, false) as boolean;
+		return buildSetCategoryBody(
+			target,
+			clear ? '' : readIdParameter(ctx, 'conversationCategory', i),
+			clear,
+		);
+	}
+	return buildSetCsStatusBody(target, ctx.getNodeParameter('conversationCsStatus', i, ''));
+};
 
 export class Kirimi implements INodeType {
 	description: INodeTypeDescription = {
@@ -398,6 +461,13 @@ export class Kirimi implements INodeType {
 					},
 					options: [
 						{
+							name: 'Add Note',
+							value: 'addNote',
+							description:
+								'Add an in-thread note on a chat, visible to the team only (never sent to the customer). Max 2000 characters.',
+							action: 'Add a note to a conversation',
+						},
+						{
 							name: 'Get Status',
 							value: 'getStatus',
 							description:
@@ -424,6 +494,26 @@ export class Kirimi implements INodeType {
 							description:
 								'Give a chat back to the bot after a human handled it. Does not change the assignment or resolved status. Fails with 409 when a CS agent took the chat over manually, unless Force is enabled.',
 							action: 'Release a conversation to the bot',
+						},
+						{
+							name: 'Run Macro',
+							value: 'runMacro',
+							description:
+								'Run a saved chat macro on a conversation (its actions run in order: reply, note, category, assignment). Stops at the first failed step; the output lists each step result. Pass an Idempotency Key so a retry does not send the reply twice.',
+							action: 'Run a chat macro on a conversation',
+						},
+						{
+							name: 'Set Category',
+							value: 'setCategory',
+							description: 'Set the category of a chat, or clear it',
+							action: 'Set the category of a conversation',
+						},
+						{
+							name: 'Set CS Status',
+							value: 'setCsStatus',
+							description:
+								'Set the customer service status of a chat (open, pending, resolved or closed). Returns changed: false when it already has that status.',
+							action: 'Set the CS status of a conversation',
 						},
 					],
 					default: 'handoff',
@@ -1528,11 +1618,164 @@ export class Kirimi implements INodeType {
 
 				// ── Conversation Fields ──────────────────────────────────────────────────
 				{
+					displayName: 'Target By',
+					name: 'targetBy',
+					type: 'options',
+					displayOptions: {
+						show: { resource: ['conversation'], operation: TARGETED_ACTIONS },
+					},
+					options: [
+						{
+							name: 'Device and Phone',
+							value: 'devicePhone',
+							description: 'Find the chat by the device (or WABA number) and the customer phone',
+						},
+						{
+							name: 'Conversation ID',
+							value: 'conversationId',
+							description: 'Use the conversation ID from the Kirimi Trigger message payload',
+						},
+					],
+					default: 'devicePhone',
+					description: 'How to find the chat',
+				},
+				{
+					displayName: 'Conversation ID',
+					name: 'conversationId',
+					type: 'string',
+					required: true,
+					displayOptions: {
+						show: {
+							resource: ['conversation'],
+							operation: TARGETED_ACTIONS,
+							targetBy: ['conversationId'],
+						},
+					},
+					default: '',
+					placeholder: '3f1c2a9e-0000-0000-0000-000000000000',
+					description:
+						'The Kirimi conversation identifier, found in the conversation object of the Kirimi Trigger message payload',
+				},
+				{
+					displayName: 'Macro',
+					name: 'conversationMacro',
+					type: 'resourceLocator',
+					required: true,
+					default: { mode: 'list', value: '' },
+					displayOptions: { show: { resource: ['conversation'], operation: ['runMacro'] } },
+					description: 'The saved chat macro to run',
+					modes: [
+						{
+							displayName: 'From List',
+							name: 'list',
+							type: 'list',
+							placeholder: 'Select a macro...',
+							typeOptions: { searchListMethod: 'searchChatMacros', searchable: true },
+						},
+						{
+							displayName: 'By ID',
+							name: 'id',
+							type: 'string',
+							placeholder: '12',
+						},
+					],
+				},
+				{
+					displayName: 'Category',
+					name: 'conversationCategory',
+					type: 'resourceLocator',
+					default: { mode: 'list', value: '' },
+					displayOptions: {
+						show: {
+							resource: ['conversation'],
+							operation: ['setCategory'],
+							clearCategory: [false],
+						},
+					},
+					description: 'The category to set on the chat',
+					modes: [
+						{
+							displayName: 'From List',
+							name: 'list',
+							type: 'list',
+							placeholder: 'Select a category...',
+							typeOptions: { searchListMethod: 'searchChatCategories', searchable: true },
+						},
+						{
+							displayName: 'By ID',
+							name: 'id',
+							type: 'string',
+							placeholder: '3f1c2a9e-0000-0000-0000-000000000000',
+						},
+					],
+				},
+				{
+					displayName: 'Clear Category',
+					name: 'clearCategory',
+					type: 'boolean',
+					displayOptions: { show: { resource: ['conversation'], operation: ['setCategory'] } },
+					default: false,
+					description: 'Whether to remove the category from the chat instead of setting one',
+				},
+				{
+					displayName: 'Status',
+					name: 'conversationCsStatus',
+					type: 'options',
+					required: true,
+					displayOptions: { show: { resource: ['conversation'], operation: ['setCsStatus'] } },
+					options: [
+						{ name: 'Closed', value: 'closed' },
+						{ name: 'Open', value: 'open' },
+						{ name: 'Pending', value: 'pending' },
+						{ name: 'Resolved', value: 'resolved' },
+					],
+					default: 'open',
+					description: 'The customer service status to set',
+				},
+				{
+					displayName: 'Note Text',
+					name: 'conversationNoteText',
+					type: 'string',
+					typeOptions: { rows: 4 },
+					required: true,
+					displayOptions: { show: { resource: ['conversation'], operation: ['addNote'] } },
+					default: '',
+					description:
+						'The note (1-2000 characters). Shown to the team inside the chat, never sent to the customer.',
+				},
+				{
+					displayName: 'Actor Name',
+					name: 'conversationActorName',
+					type: 'string',
+					displayOptions: {
+						show: { resource: ['conversation'], operation: ['runMacro', 'addNote'] },
+					},
+					default: '',
+					placeholder: 'n8n',
+					description:
+						'Name shown on the note or reply as the author (max 100 characters). Defaults to "API".',
+				},
+				{
+					displayName: 'Idempotency Key',
+					name: 'conversationIdempotencyKey',
+					type: 'string',
+					displayOptions: { show: { resource: ['conversation'], operation: ['runMacro'] } },
+					default: '',
+					placeholder: 'order-1042-reply',
+					description:
+						'Optional key (max 100 characters). Running the macro again with the same key does not send the reply twice.',
+				},
+
+				{
 					displayName: 'Channel',
 					name: 'conversationChannel',
 					type: 'options',
 					displayOptions: {
-						show: { resource: ['conversation'], operation: ['handoff', 'getStatus', 'release'] },
+						show: {
+							resource: ['conversation'],
+							operation: ['handoff', 'getStatus', 'release', ...TARGETED_ACTIONS],
+						},
+						hide: { targetBy: ['conversationId'] },
 					},
 					options: [
 						{ name: 'QR Device', value: 'device', description: 'WhatsApp connected by QR code' },
@@ -1552,9 +1795,10 @@ export class Kirimi implements INodeType {
 					displayOptions: {
 						show: {
 							resource: ['conversation'],
-							operation: ['handoff', 'getStatus', 'release'],
+							operation: ['handoff', 'getStatus', 'release', ...TARGETED_ACTIONS],
 							conversationChannel: ['device'],
 						},
+						hide: { targetBy: ['conversationId'] },
 					},
 					description: 'The QR device the chat is on (device ID, e.g. D-2J3IG)',
 				}),
@@ -1567,9 +1811,10 @@ export class Kirimi implements INodeType {
 					displayOptions: {
 						show: {
 							resource: ['conversation'],
-							operation: ['handoff', 'getStatus', 'release'],
+							operation: ['handoff', 'getStatus', 'release', ...TARGETED_ACTIONS],
 							conversationChannel: ['waba'],
 						},
+						hide: { targetBy: ['conversationId'] },
 					},
 					description: 'The WABA phone number the chat is on (its phone number ID)',
 					modes: [
@@ -1594,7 +1839,11 @@ export class Kirimi implements INodeType {
 					type: 'string',
 					required: true,
 					displayOptions: {
-						show: { resource: ['conversation'], operation: ['handoff', 'getStatus', 'release'] },
+						show: {
+							resource: ['conversation'],
+							operation: ['handoff', 'getStatus', 'release', ...TARGETED_ACTIONS],
+						},
+						hide: { targetBy: ['conversationId'] },
 					},
 					default: '',
 					placeholder: '628123456789',
@@ -1649,7 +1898,8 @@ export class Kirimi implements INodeType {
 					type: 'boolean',
 					displayOptions: { show: { resource: ['conversation'], operation: ['release'] } },
 					default: false,
-					description: 'Whether to return the chat to the bot even if a CS agent took it over manually',
+					description:
+						'Whether to return the chat to the bot even if a CS agent took it over manually',
 				},
 
 				// ── Device Fields ────────────────────────────────────────────────────────
@@ -1975,6 +2225,18 @@ export class Kirimi implements INodeType {
 				filter?: string,
 			): Promise<INodeListSearchResult> {
 				return await searchWabaNumbers.call(this, filter);
+			},
+			async searchChatMacros(
+				this: ILoadOptionsFunctions,
+				filter?: string,
+			): Promise<INodeListSearchResult> {
+				return await searchChatMacros.call(this, filter);
+			},
+			async searchChatCategories(
+				this: ILoadOptionsFunctions,
+				filter?: string,
+			): Promise<INodeListSearchResult> {
+				return await searchChatCategories.call(this, filter);
 			},
 			async searchTeamAssignees(
 				this: ILoadOptionsFunctions,
@@ -2335,6 +2597,42 @@ export class Kirimi implements INodeType {
 							{},
 						);
 						returnData.push(...assigneesFromResponse(response));
+						continue;
+					}
+
+					if (TARGETED_ACTIONS.includes(operation)) {
+						try {
+							endpoint = CONVERSATION_ENDPOINTS[operation as ActionOperation];
+							Object.assign(body, buildActionBody(this, i, operation as ActionOperation));
+						} catch (error) {
+							throw new NodeOperationError(this.getNode(), (error as Error).message, {
+								itemIndex: i,
+							});
+						}
+						if (operation === 'runMacro') {
+							// HTTP 422 = a macro step failed: show the step results instead of a bare error
+							const { response, failed } = await kirimiApiRequestKeepFailure.call(
+								this,
+								method,
+								endpoint,
+								body,
+							);
+							if (!failed) {
+								returnData.push(unwrapData(response));
+								continue;
+							}
+							if (this.continueOnFail()) {
+								returnData.push(response as IDataObject);
+								continue;
+							}
+							throw new NodeOperationError(
+								this.getNode(),
+								String(response.message ?? 'Macro stopped'),
+								{ itemIndex: i, description: describeMacroResults(response) },
+							);
+						}
+						const response = await kirimiApiRequest.call(this, method, endpoint, body);
+						returnData.push(unwrapData(response));
 						continue;
 					}
 
