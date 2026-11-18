@@ -24,10 +24,23 @@ The package contains one credential and three nodes:
 
 ## Installation
 
-Follow the [n8n community nodes installation guide](https://docs.n8n.io/integrations/community-nodes/installation/):
-in n8n open **Settings > Community Nodes > Install** and enter `n8n-nodes-kirimi`.
+Kirimi is a [verified community node](https://docs.n8n.io/integrations/community-nodes/installation/verified-install/).
 
-For a self-hosted instance you can also install it manually:
+### Option 1: from the nodes panel (recommended)
+
+Works on n8n Cloud and self-hosted. On the canvas open the nodes panel (**+** or press **N**), search for
+**Kirimi**, select it under **More from the community** and click **Install**. Only instance owners and
+admins can install.
+
+The nodes panel installs the version n8n has verified, so a new release can take a few days to show up there.
+
+### Option 2: from npm (self-hosted)
+
+Installs the latest release right away. Follow the
+[n8n community nodes installation guide](https://docs.n8n.io/integrations/community-nodes/installation/gui-install/):
+open **Settings > Community Nodes > Install** and enter `n8n-nodes-kirimi`.
+
+Or install it manually:
 
 ```bash
 cd ~/.n8n/nodes
