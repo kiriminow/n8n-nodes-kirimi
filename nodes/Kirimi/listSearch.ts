@@ -179,3 +179,77 @@ export async function searchTeamAssignees(
 		throw asNodeError(this.getNode(), error);
 	}
 }
+
+export interface KirimiChatMacro {
+	id?: number | string;
+	name?: string;
+	action_count?: number;
+}
+
+export interface KirimiChatCategory {
+	id?: string;
+	name?: string;
+}
+
+const listFromResponse = <T>(response: unknown): T[] => {
+	const data =
+		response && typeof response === 'object' ? (response as IDataObject).data : undefined;
+	if (Array.isArray(data)) return data as T[];
+	const items = data && typeof data === 'object' ? (data as IDataObject).items : undefined;
+	return Array.isArray(items) ? (items as T[]) : [];
+};
+
+/** Saved chat macros as "Name (N aksi)" with the numeric macro id as value. */
+export const macrosToResults = (
+	macros: KirimiChatMacro[],
+	filter?: string,
+): INodeListSearchResult['results'] =>
+	macros
+		.filter((macro) => macro.id !== undefined && macro.id !== null)
+		.filter((macro) => matches(filter, macro.name, String(macro.id)))
+		.map((macro) => ({
+			name: `${macro.name || String(macro.id)} (${macro.action_count ?? 0} aksi)`,
+			value: String(macro.id),
+		}));
+
+export const categoriesToResults = (
+	categories: KirimiChatCategory[],
+	filter?: string,
+): INodeListSearchResult['results'] =>
+	categories
+		.filter((category) => category.id)
+		.filter((category) => matches(filter, category.name, category.id))
+		.map((category) => ({
+			name: category.name || (category.id as string),
+			value: category.id as string,
+		}));
+
+/** Older servers do not have /v1/chat-macros/list yet: a 404 yields an empty list. */
+export async function searchChatMacros(
+	this: ILoadOptionsFunctions,
+	filter?: string,
+): Promise<INodeListSearchResult> {
+	try {
+		const response = await kirimiApiRequest.call(this, 'POST', '/v1/chat-macros/list', {});
+		return { results: macrosToResults(listFromResponse<KirimiChatMacro>(response), filter) };
+	} catch (error) {
+		if (isNotFound(error)) return { results: [] };
+		throw asNodeError(this.getNode(), error);
+	}
+}
+
+/** Older servers do not have /v1/chat-categories/list yet: a 404 yields an empty list. */
+export async function searchChatCategories(
+	this: ILoadOptionsFunctions,
+	filter?: string,
+): Promise<INodeListSearchResult> {
+	try {
+		const response = await kirimiApiRequest.call(this, 'POST', '/v1/chat-categories/list', {});
+		return {
+			results: categoriesToResults(listFromResponse<KirimiChatCategory>(response), filter),
+		};
+	} catch (error) {
+		if (isNotFound(error)) return { results: [] };
+		throw asNodeError(this.getNode(), error);
+	}
+}

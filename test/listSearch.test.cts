@@ -4,6 +4,10 @@ import { describe, it } from 'node:test';
 import { Kirimi } from '../nodes/Kirimi/Kirimi.node';
 import {
 	DEVICES_PAGE_SIZE,
+	categoriesToResults,
+	macrosToResults,
+	searchChatCategories,
+	searchChatMacros,
 	devicesToResults,
 	nextPageToken,
 	searchDevices,
@@ -158,5 +162,62 @@ describe('Kirimi node versioning', () => {
 			await new Kirimi().execute.call(ctx as never);
 			assert.deepEqual(ctx.requests[0].options.body, { device_id: 'D-77' });
 		}
+	});
+});
+
+describe('chat macro and category pickers', () => {
+	const macros = [
+		{ id: 3, name: 'Greeting', action_count: 2 },
+		{ id: 9, name: 'Close out', action_count: 1 },
+		{ name: 'no id' },
+	];
+
+	it('maps macros to "<name> (<n> aksi)" and filters by name', () => {
+		assert.deepEqual(macrosToResults(macros), [
+			{ name: 'Greeting (2 aksi)', value: '3' },
+			{ name: 'Close out (1 aksi)', value: '9' },
+		]);
+		assert.deepEqual(
+			macrosToResults(macros, 'clos').map((r) => r.value),
+			['9'],
+		);
+	});
+
+	it('maps categories', () => {
+		const cats = [{ id: 'a1', name: 'Sales' }, { id: 'b2', name: 'Support' }, { name: 'x' }];
+		assert.deepEqual(categoriesToResults(cats), [
+			{ name: 'Sales', value: 'a1' },
+			{ name: 'Support', value: 'b2' },
+		]);
+		assert.deepEqual(
+			categoriesToResults(cats, 'supp').map((r) => r.value),
+			['b2'],
+		);
+	});
+
+	it('search methods post to the list endpoints and tolerate a 404', async () => {
+		const macroCtx = createContext({
+			params: {},
+			respond: () => ({ data: [{ id: 3, name: 'Greeting', action_count: 2 }] }),
+		});
+		const macroResult = await searchChatMacros.call(macroCtx as never);
+		assert.deepEqual(macroResult.results, [{ name: 'Greeting (2 aksi)', value: '3' }]);
+		assert.ok(macroCtx.requests[0].options.url?.endsWith('/v1/chat-macros/list'));
+
+		const catCtx = createContext({
+			params: {},
+			respond: () => ({ data: [{ id: 'a1', name: 'Sales' }] }),
+		});
+		await searchChatCategories.call(catCtx as never);
+		assert.ok(catCtx.requests[0].options.url?.endsWith('/v1/chat-categories/list'));
+
+		const missing = createContext({
+			params: {},
+			respond: () => {
+				throw Object.assign(new Error('Not found'), { httpCode: '404' });
+			},
+		});
+		assert.deepEqual(await searchChatMacros.call(missing as never), { results: [] });
+		assert.deepEqual(await searchChatCategories.call(missing as never), { results: [] });
 	});
 });

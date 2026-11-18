@@ -103,6 +103,16 @@ Hand a customer chat over to the human team (Team Inbox / Chat page in Kirimi) a
 | Get Status | `/v1/conversations/status` | Channel, Device / WABA Number, Phone. Returns `exists`, `conversation_id`, `human_handling`, `reason`, `cs_status`, `assigned_team_id`, `assignee_name`, `assigned_at` |
 | Release to Bot | `/v1/conversations/release` | Channel, Device / WABA Number, Phone; optional Note and Force (default off). Does not change the assignment or resolved status. Returns 409 when a CS agent took the chat over manually, unless Force is on (sends `force: true`) |
 | List Assignees | `/v1/team/assignees` | None. One item per active team member: `team_id`, `name`, `email` |
+| Run Macro | `/v1/conversations/apply-macro` | Target By, Macro (From List, shows the number of actions, or By ID); optional Actor Name (max 100 characters) and Idempotency Key (max 100 characters; a retry with the same key does not send the reply twice). Runs the macro actions in order and stops at the first failed step. Output: `macro_id`, `ok`, `results` (one entry per step). When a step fails (HTTP 422) the node errors with the server message and lists each step in the error description; with Continue On Fail it outputs the full response (`success: false`, `data.results`) instead |
+| Add Note | `/v1/conversations/add-note` | Target By, Note Text (1-2000 characters), optional Actor Name. In-thread note for the team, never sent to the customer |
+| Set Category | `/v1/conversations/set-category` | Target By, Category (From List or By ID) or Clear Category (sends `category_id: null`) |
+| Set CS Status | `/v1/conversations/set-cs-status` | Target By, Status (open, pending, resolved, closed). Output has `changed: false` when the chat already had that status |
+
+Run Macro, Add Note, Set Category and Set CS Status take **Target By**: Device and Phone (default, same fields
+as above) or Conversation ID (the `conversation.id` of a Kirimi Trigger message payload).
+
+Warning: a macro with a Send Reply action, triggered by a webhook on outgoing messages, can loop. Filter
+`is_from_me` or the macro reply in your flow.
 
 A conversation is identified by the device and the customer phone. For a QR device use the device ID
 (`D-xxxxx`); for a WABA number use its **phone number ID** (the From List picker fills it in). The phone is

@@ -151,6 +151,53 @@ export async function kirimiApiRequest(
 }
 
 /**
+ * Like kirimiApiRequest, but an HTTP 422 whose body is a Kirimi failure envelope ({ success: false, data })
+ * is returned as `{ response, failed: true }` instead of thrown, so the caller can show the step results.
+ * Every other error is thrown exactly as kirimiApiRequest does.
+ */
+export async function kirimiApiRequestKeepFailure(
+	this: KirimiRequestContext,
+	method: IHttpRequestMethods,
+	endpoint: string,
+	body: IDataObject = {},
+): Promise<{ response: KirimiResponse; failed: boolean }> {
+	const credentials = await this.getCredentials('kirimiApi');
+	const options: IHttpRequestOptions = {
+		method,
+		body,
+		qs: {},
+		url: `${trimBaseUrl(credentials.baseUrl)}${endpoint}`,
+		json: true,
+	};
+	try {
+		const response = (await this.helpers.httpRequestWithAuthentication.call(
+			this,
+			'kirimiApi',
+			options,
+		)) as KirimiResponse;
+		return { response, failed: false };
+	} catch (error) {
+		const failure = extractKirimiErrorBody(error);
+		if (statusOf(error) === '422' && failure && failure.success === false) {
+			return { response: failure as KirimiResponse, failed: true };
+		}
+		throw wrapKirimiError(this.getNode(), error);
+	}
+}
+
+/** One line per macro step, e.g. `#1 send_reply: ok; #2 assign: failed - <message>`. */
+export const describeMacroResults = (response: KirimiResponse): string => {
+	const results = (response.data as IDataObject | undefined)?.results;
+	if (!Array.isArray(results)) return '';
+	return (results as IDataObject[])
+		.map((step) => {
+			const message = step.message ? ` - ${String(step.message)}` : '';
+			return `#${String(step.index ?? '?')} ${String(step.type ?? 'step')}: ${String(step.status ?? '?')}${message}`;
+		})
+		.join('; ');
+};
+
+/**
  * Multipart request. The generic credential `authenticate` merges JSON properties into the body and
  * does not apply to a raw multipart payload, so the caller must put user_code and secret into the
  * form fields itself (see buildMultipartBody).

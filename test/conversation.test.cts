@@ -3,12 +3,18 @@ import { describe, it } from 'node:test';
 
 import {
 	CONVERSATION_ENDPOINTS,
+	MAX_ACTION_NOTE_LENGTH,
 	MAX_NOTE_LENGTH,
 	assigneeBody,
 	assigneesFromResponse,
+	buildAddNoteBody,
+	buildApplyMacroBody,
 	buildHandoffBody,
 	buildReleaseBody,
+	buildSetCategoryBody,
+	buildSetCsStatusBody,
 	buildStatusBody,
+	targetBody,
 	normalizePhone,
 	readAssignee,
 	unwrapData,
@@ -167,7 +173,7 @@ const run = async (params: Record<string, unknown>, response: unknown) => {
 };
 
 describe('Kirimi node: conversation resource', () => {
-	it('exposes the resource and its four operations', () => {
+	it('exposes the resource and its eight operations', () => {
 		const props = new Kirimi().description.properties;
 		const resource = props.find((p) => p.name === 'resource');
 		assert.ok(resource?.options?.some((o) => 'value' in o && o.value === 'conversation'));
@@ -176,7 +182,16 @@ describe('Kirimi node: conversation resource', () => {
 		);
 		assert.deepEqual(
 			ops?.options?.map((o) => 'value' in o && o.value),
-			['getStatus', 'handoff', 'listAssignees', 'release'],
+			[
+				'addNote',
+				'getStatus',
+				'handoff',
+				'listAssignees',
+				'release',
+				'runMacro',
+				'setCategory',
+				'setCsStatus',
+			],
 		);
 	});
 
@@ -265,5 +280,233 @@ describe('Kirimi node: conversation resource', () => {
 		});
 		await assert.rejects(new Kirimi().execute.call(ctx as never), /Device is required/);
 		assert.equal(ctx.requests.length, 0);
+	});
+});
+
+const byPhone = { by: 'devicePhone' as const, deviceId: 'D-1', phone: '08123456789' };
+const byId = { by: 'conversationId' as const, conversationId: ' c-uuid ' };
+
+describe('conversation action builders', () => {
+	it('targetBody covers both modes and validates', () => {
+		assert.deepEqual(targetBody(byPhone), { device_id: 'D-1', phone: '628123456789' });
+		assert.deepEqual(targetBody(byId), { conversation_id: 'c-uuid' });
+		assert.throws(
+			() => targetBody({ by: 'conversationId', conversationId: ' ' }),
+			/Conversation ID/,
+		);
+		assert.throws(() => targetBody({ ...byPhone, deviceId: '' }), /Device/);
+		assert.throws(() => targetBody({ ...byPhone, phone: 'abc' }), /Phone/);
+	});
+
+	it('macro id must be a positive whole number', () => {
+		assert.deepEqual(buildApplyMacroBody(byId, '12'), { conversation_id: 'c-uuid', macro_id: 12 });
+		for (const bad of ['', '0', '-1', '1.5', 'abc', undefined]) {
+			assert.throws(() => buildApplyMacroBody(byId, bad), /Macro ID/);
+		}
+	});
+
+	it('actor name is trimmed and omitted when empty; idempotency key is bounded', () => {
+		assert.deepEqual(buildApplyMacroBody(byPhone, 3, '  Bot  ', ' k1 '), {
+			device_id: 'D-1',
+			phone: '628123456789',
+			macro_id: 3,
+			actor_name: 'Bot',
+			idempotency_key: 'k1',
+		});
+		assert.deepEqual(buildApplyMacroBody(byId, 3, '   ', ''), {
+			conversation_id: 'c-uuid',
+			macro_id: 3,
+		});
+		assert.throws(() => buildApplyMacroBody(byId, 3, 'x'.repeat(101)), /Actor name/);
+		assert.throws(() => buildApplyMacroBody(byId, 3, '', 'k'.repeat(101)), /Idempotency/);
+	});
+
+	it('note must be 1-2000 characters', () => {
+		assert.deepEqual(buildAddNoteBody(byId, ' hi ', 'n8n'), {
+			conversation_id: 'c-uuid',
+			text: 'hi',
+			actor_name: 'n8n',
+		});
+		assert.throws(() => buildAddNoteBody(byId, '  '), /required/);
+		assert.throws(() => buildAddNoteBody(byId, 'x'.repeat(MAX_ACTION_NOTE_LENGTH + 1)), /2000/);
+		assert.doesNotThrow(() => buildAddNoteBody(byId, 'x'.repeat(MAX_ACTION_NOTE_LENGTH)));
+	});
+
+	it('set category sends the id, or null when clearing', () => {
+		assert.deepEqual(buildSetCategoryBody(byId, ' cat-1 ', false), {
+			conversation_id: 'c-uuid',
+			category_id: 'cat-1',
+		});
+		assert.deepEqual(buildSetCategoryBody(byId, '', true), {
+			conversation_id: 'c-uuid',
+			category_id: null,
+		});
+		assert.throws(() => buildSetCategoryBody(byId, '', false), /Category/);
+	});
+
+	it('set cs status only accepts the four statuses', () => {
+		for (const status of ['open', 'pending', 'resolved', 'closed']) {
+			assert.deepEqual(buildSetCsStatusBody(byId, status), {
+				conversation_id: 'c-uuid',
+				status,
+			});
+		}
+		assert.throws(() => buildSetCsStatusBody(byId, 'done'), /Status/);
+		assert.throws(() => buildSetCsStatusBody(byId, ''), /Status/);
+	});
+});
+
+describe('Kirimi node: conversation actions', () => {
+	it('run macro by conversation id posts apply-macro', async () => {
+		const { ctx, items } = await run(
+			{
+				resource: 'conversation',
+				operation: 'runMacro',
+				targetBy: 'conversationId',
+				conversationId: 'c-1',
+				conversationMacro: { mode: 'list', value: '7' },
+				conversationActorName: 'Bot',
+				conversationIdempotencyKey: 'run-1',
+			},
+			{ success: true, data: { macro_id: 7, ok: true, results: [] } },
+		);
+		assert.ok(ctx.requests[0].options.url?.endsWith('/v1/conversations/apply-macro'));
+		assert.deepEqual(ctx.requests[0].options.body, {
+			conversation_id: 'c-1',
+			macro_id: 7,
+			actor_name: 'Bot',
+			idempotency_key: 'run-1',
+		});
+		assert.deepEqual(items, [{ macro_id: 7, ok: true, results: [] }]);
+	});
+
+	it('add note by device and phone uses the channel locators', async () => {
+		const { ctx } = await run(
+			{
+				resource: 'conversation',
+				operation: 'addNote',
+				conversationChannel: 'waba',
+				conversationWabaNumberId: { mode: 'id', value: '555' },
+				conversationPhone: '0811',
+				conversationNoteText: 'call back',
+			},
+			{ success: true, data: {} },
+		);
+		assert.ok(ctx.requests[0].options.url?.endsWith('/v1/conversations/add-note'));
+		assert.deepEqual(ctx.requests[0].options.body, {
+			device_id: '555',
+			phone: '62811',
+			text: 'call back',
+		});
+	});
+
+	it('set category clears with null and set cs status posts the status', async () => {
+		const clear = await run(
+			{
+				resource: 'conversation',
+				operation: 'setCategory',
+				targetBy: 'conversationId',
+				conversationId: 'c-1',
+				clearCategory: true,
+			},
+			{ success: true, data: {} },
+		);
+		assert.ok(clear.ctx.requests[0].options.url?.endsWith('/v1/conversations/set-category'));
+		assert.deepEqual(clear.ctx.requests[0].options.body, {
+			conversation_id: 'c-1',
+			category_id: null,
+		});
+
+		const status = await run(
+			{
+				resource: 'conversation',
+				operation: 'setCsStatus',
+				targetBy: 'conversationId',
+				conversationId: 'c-1',
+				conversationCsStatus: 'resolved',
+			},
+			{ success: true, data: { status: 'resolved', changed: true } },
+		);
+		assert.ok(status.ctx.requests[0].options.url?.endsWith('/v1/conversations/set-cs-status'));
+		assert.deepEqual(status.items, [{ status: 'resolved', changed: true }]);
+	});
+
+	it('rejects an invalid action before any request', async () => {
+		const ctx = createContext({
+			params: {
+				resource: 'conversation',
+				operation: 'setCsStatus',
+				targetBy: 'conversationId',
+				conversationId: 'c-1',
+				conversationCsStatus: 'bogus',
+			},
+			typeVersion: 3,
+		});
+		await assert.rejects(() => new Kirimi().execute.call(ctx as never), /Status must be one of/);
+		assert.equal(ctx.requests.length, 0);
+	});
+
+	const failedMacro = {
+		success: false,
+		message: 'Makro "Halo" berhenti: Chat pribadi tidak bisa di-assign',
+		data: {
+			macro_id: 7,
+			ok: false,
+			results: [
+				{ index: 0, type: 'send_reply', status: 'ok' },
+				{ index: 1, type: 'assign', status: 'failed', message: 'Chat pribadi' },
+				{ index: 2, type: 'add_note', status: 'skipped' },
+			],
+		},
+	};
+	const macroParams = {
+		resource: 'conversation',
+		operation: 'runMacro',
+		targetBy: 'conversationId',
+		conversationId: 'c-1',
+		conversationMacro: { mode: 'id', value: '7' },
+	};
+	const throw422 = () => {
+		throw Object.assign(new Error('Unprocessable'), {
+			httpCode: '422',
+			response: { body: failedMacro },
+		});
+	};
+
+	it('run macro 422 throws the server message with the step results in the description', async () => {
+		const ctx = createContext({ params: macroParams, respond: throw422, typeVersion: 3 });
+		await assert.rejects(
+			() => new Kirimi().execute.call(ctx as never),
+			(error: Error & { description?: string }) => {
+				assert.equal(error.message, failedMacro.message);
+				assert.match(error.description ?? '', /#1 assign: failed - Chat pribadi/);
+				assert.match(error.description ?? '', /#2 add_note: skipped/);
+				return true;
+			},
+		);
+	});
+
+	it('run macro 422 with continueOnFail outputs the full response', async () => {
+		const ctx = createContext({ params: macroParams, respond: throw422, typeVersion: 3 });
+		ctx.continueOnFail = () => true;
+		const out = await new Kirimi().execute.call(ctx as never);
+		assert.deepEqual(
+			out[0].map((item) => item.json),
+			[failedMacro],
+		);
+	});
+
+	it('run macro keeps the normal error path for other statuses', async () => {
+		const ctx = createContext({
+			params: macroParams,
+			typeVersion: 3,
+			respond: () => {
+				throw Object.assign(new Error('Not found'), {
+					httpCode: '404',
+					response: { body: { success: false, message: 'Makro tidak ditemukan' } },
+				});
+			},
+		});
+		await assert.rejects(() => new Kirimi().execute.call(ctx as never), /Makro tidak ditemukan/);
 	});
 });
